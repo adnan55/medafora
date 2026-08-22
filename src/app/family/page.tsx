@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Users, Plus, Edit3, Trash2, ShieldAlert } from 'lucide-react'
+import { Users, Plus, Edit3, Trash2, ShieldAlert, Sparkles, Calendar } from 'lucide-react'
 import { DeleteFamilyMemberButton } from '@/components/DeleteFamilyMemberButton'
+import { EditFamilyMemberModal } from '@/components/EditFamilyMemberModal'
+import { calculateAge } from '@/lib/utils/ageCalculator'
 
 export default async function FamilyPage() {
   const supabase = await createClient()
@@ -33,7 +35,7 @@ export default async function FamilyPage() {
         <header className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-2xl font-extrabold text-[#2F4858] tracking-tight">Family Profiles</h1>
-            <p className="text-xs font-semibold text-[#2F4858]/70 mt-1">Manage medicine cabinets, medical histories, and AI-analyzed lab reports</p>
+            <p className="text-xs font-semibold text-[#2F4858]/70 mt-1">Manage medicine cabinets, age-specific safety, and AI-analyzed health records</p>
           </div>
           <Button render={<Link href="/family/new" />} size="sm" className="bg-[#2F4858] text-[#DDFBEF] rounded-xl hover:bg-[#1E313D] text-xs font-extrabold shadow-sm flex items-center gap-1.5 cursor-pointer">
             <Plus className="w-4 h-4 mr-1" />
@@ -46,6 +48,8 @@ export default async function FamilyPage() {
             {familyMembers.map((member) => {
               const memberMeds = medicines?.filter(m => m.family_member_id === member.id) || [];
               const memberRecords = medicalRecords?.filter(r => r.family_member_id === member.id) || [];
+              const ageInfo = calculateAge(member.date_of_birth || member.birth_date);
+
               return (
                 <Card key={member.id} className="bg-white border-[#2F4858]/15 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col items-center text-center justify-between">
                   <div className="flex flex-col items-center w-full">
@@ -57,9 +61,25 @@ export default async function FamilyPage() {
                     
                     <h3 className="font-extrabold text-[#2F4858] leading-tight text-base">{member.full_name}</h3>
                     
-                    <Badge variant="outline" className="text-[10px] bg-[#DDFBEF] text-[#2F4858] px-2.5 py-0.5 rounded-full mt-1.5 mb-2 uppercase tracking-wider font-bold border-[#B7EED8]">
-                      {member.relationship}
-                    </Badge>
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1.5 mb-2.5">
+                      <Badge variant="outline" className="text-[10px] bg-[#DDFBEF] text-[#2F4858] px-2.5 py-0.5 rounded-full uppercase tracking-wider font-bold border-[#B7EED8]">
+                        {member.relationship}
+                      </Badge>
+                      {ageInfo ? (
+                        <Badge className={`text-[10px] font-black px-2 py-0.5 rounded-full ${ageInfo.badgeColor}`}>
+                          {ageInfo.formatted} • {ageInfo.lifeStageLabel}
+                        </Badge>
+                      ) : (
+                        <EditFamilyMemberModal
+                          member={member}
+                          trigger={
+                            <span className="text-[10px] font-bold text-[#2F4858]/60 hover:text-[#2F4858] underline cursor-pointer">
+                              + Set DOB
+                            </span>
+                          }
+                        />
+                      )}
+                    </div>
 
                     <div className="flex flex-wrap justify-center gap-1.5 mb-3">
                       {member.allergies && member.allergies.length > 0 && (
@@ -69,7 +89,7 @@ export default async function FamilyPage() {
                         </Badge>
                       )}
                       <Badge variant="outline" className="text-[10px] font-bold bg-[#F8FDFB] text-[#2F4858] border-[#2F4858]/15">
-                        {memberRecords.length} Reports / Records
+                        {memberRecords.length} Lab Records
                       </Badge>
                       <Badge variant="outline" className="text-[10px] font-bold bg-[#F8FDFB] text-[#2F4858] border-[#2F4858]/15">
                         {memberMeds.length} Medicines
@@ -80,8 +100,18 @@ export default async function FamilyPage() {
                   <div className="mt-auto pt-4 border-t border-[#2F4858]/10 w-full flex flex-col gap-2.5">
                     <div className="flex items-center gap-2">
                       <Button render={<Link href={`/family/${member.id}`} />} size="sm" className="bg-[#2F4858] hover:bg-[#1E313D] text-[#DDFBEF] rounded-xl text-xs font-extrabold flex-1 shadow-sm flex items-center justify-center gap-1">
-                        <span>Health & Lab Records →</span>
+                        <Sparkles className="size-3.5 text-[#DDFBEF]" />
+                        <span>AI Health Hub →</span>
                       </Button>
+
+                      <EditFamilyMemberModal
+                        member={member}
+                        trigger={
+                          <Button size="icon-sm" variant="outline" className="rounded-xl border-[#2F4858]/20 text-[#2F4858] hover:bg-[#DDFBEF]/50 cursor-pointer" title="Edit Profile">
+                            <Edit3 className="size-3.5" />
+                          </Button>
+                        }
+                      />
 
                       <DeleteFamilyMemberButton
                         memberId={member.id}

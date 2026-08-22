@@ -32,7 +32,10 @@ import { MedicalRecordDetailModal } from '@/components/MedicalRecordDetailModal'
 import { MedicineDetailsDrawer } from '@/components/MedicineDetailsDrawer'
 import { LogVitalModal } from '@/components/LogVitalModal'
 import { BiomarkerTrendChart } from '@/components/BiomarkerTrendChart'
+import { AIHealthSummaryCard } from '@/components/AIHealthSummaryCard'
+import { EditFamilyMemberModal } from '@/components/EditFamilyMemberModal'
 import { calculateExpiryStatus } from '@/lib/utils/expiryCalculator'
+import { calculateAge, checkAgeSpecificMedicineAlerts } from '@/lib/utils/ageCalculator'
 
 interface FamilyMemberHealthHubProps {
   member: any
@@ -49,6 +52,7 @@ export function FamilyMemberHealthHub({
 }: FamilyMemberHealthHubProps) {
   const records = medicalRecords || []
   const vitals = vitalLogs || []
+  const ageInfo = calculateAge(member.date_of_birth || member.birth_date)
 
   const labReports = records.filter(r => r.record_type === 'LAB_REPORT' || r.record_type === 'IMAGING')
   const clinicalDiagnoses = records.filter(r => r.record_type === 'DIAGNOSIS' || r.record_type === 'DOCTOR_CONSULT' || r.record_type === 'DISCHARGE_SUMMARY' || r.diagnosis)
@@ -319,6 +323,8 @@ export function FamilyMemberHealthHub({
               dotColor = 'bg-amber-600';
             }
 
+            const ageAlert = checkAgeSpecificMedicineAlerts(med.medicine_name, med.salt_composition, ageInfo);
+
             return (
               <Card key={med.id} className="bg-white border-[#2F4858]/15 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
                 <div className="space-y-3">
@@ -339,6 +345,13 @@ export function FamilyMemberHealthHub({
                   <p className="text-xs font-bold text-[#2F4858]/80 bg-[#DDFBEF]/30 p-2 rounded-xl border border-[#B7EED8]">
                     {med.salt_composition}
                   </p>
+
+                  {/* Age Specific Alert if applicable */}
+                  {ageAlert.hasWarning && (
+                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold leading-relaxed">
+                      {ageAlert.message}
+                    </div>
+                  )}
 
                   {/* Expiry Banner */}
                   <div className={`flex items-center justify-between p-2 px-2.5 rounded-xl border text-xs font-bold ${statusColor}`}>
@@ -372,7 +385,17 @@ export function FamilyMemberHealthHub({
     </div>
   )
 
-  // 0. Vitals & Biomarker Trends Tab
+  // 0. AI Clinical Guardian Tab
+  const AISummaryTab = (
+    <AIHealthSummaryCard
+      member={member}
+      medicines={medicines}
+      medicalRecords={records}
+      vitalLogs={vitals}
+    />
+  )
+
+  // 1. Vitals & Biomarker Trends Tab
   const VitalsTab = (
     <BiomarkerTrendChart
       familyMemberId={member.id}
@@ -383,6 +406,13 @@ export function FamilyMemberHealthHub({
   )
 
   const tabs: AnimatedTabItem[] = [
+    {
+      value: 'ai-insights',
+      label: 'AI Health Guardian',
+      icon: Sparkles,
+      badge: 'AI',
+      content: AISummaryTab,
+    },
     {
       value: 'vitals',
       label: 'Vitals & Biomarker Trends',
@@ -431,6 +461,20 @@ export function FamilyMemberHealthHub({
                 <Badge variant="outline" className="text-xs font-black uppercase bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8] px-2.5 py-0.5 rounded-full">
                   {member.relationship}
                 </Badge>
+                {ageInfo ? (
+                  <Badge className={`text-xs font-black px-2.5 py-0.5 rounded-full shadow-xs ${ageInfo.badgeColor}`}>
+                    Age: {ageInfo.formatted} • {ageInfo.lifeStageLabel}
+                  </Badge>
+                ) : (
+                  <EditFamilyMemberModal
+                    member={member}
+                    trigger={
+                      <button className="text-[11px] font-bold text-[#2F4858]/70 hover:text-[#2F4858] underline cursor-pointer">
+                        + Set Birthdate for Age AI
+                      </button>
+                    }
+                  />
+                )}
               </div>
               <p className="text-xs font-semibold text-[#2F4858]/70">
                 Patient & Medical Records Guardian Profile
@@ -445,11 +489,12 @@ export function FamilyMemberHealthHub({
 
           {/* Quick Actions & Allergy Stats */}
           <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full md:w-auto">
-            <div className="w-full sm:w-auto [&>button]:w-full sm:[&>button]:w-auto">
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto [&>button]:w-full sm:[&>button]:w-auto [&>div]:w-full sm:[&>div]:w-auto">
               <LogVitalModal
                 familyMemberId={member.id}
                 familyMemberName={member.full_name}
               />
+              <EditFamilyMemberModal member={member} />
             </div>
 
             <div className="w-full sm:w-auto">
@@ -473,7 +518,7 @@ export function FamilyMemberHealthHub({
       </Card>
 
       {/* Animated Tabs Content */}
-      <AnimatedTabs tabs={tabs} defaultValue="vitals" />
+      <AnimatedTabs tabs={tabs} defaultValue="ai-insights" />
     </div>
   )
 }

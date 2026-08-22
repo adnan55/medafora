@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { calculateExpiryStatus } from '@/lib/utils/expiryCalculator'
+import { calculateAge } from '@/lib/utils/ageCalculator'
 import { Navbar } from '@/components/Navbar'
 import { DashboardFilters } from '@/components/DashboardFilters'
 import { MedicineDetailsDrawer } from '@/components/MedicineDetailsDrawer'
@@ -272,6 +273,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
                     <Badge variant="outline" className="bg-[#DDFBEF] text-[#2F4858] font-black border-[#B7EED8] text-[10px] uppercase tracking-wider rounded-full px-2.5">
                       {currentMemberObj.relationship}
                     </Badge>
+                    {(() => {
+                      const age = calculateAge(currentMemberObj.date_of_birth || currentMemberObj.birth_date)
+                      return age ? (
+                        <Badge className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full shadow-xs ${age.badgeColor}`}>
+                          Age: {age.formatted} • {age.lifeStageLabel}
+                        </Badge>
+                      ) : null
+                    })()}
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs">
