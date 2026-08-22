@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
@@ -10,9 +10,33 @@ const googleSans = localFont({
   display: "swap",
 });
 
+export const viewport: Viewport = {
+  themeColor: "#2F4858",
+  width: "device-width",
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
-  title: "Medafora - Family Medicine Tracker",
-  description: "Secure digital medicine cabinet",
+  title: "Medafora - Family Medicine & Health Guardian",
+  description: "Family Medicine, Safety & AI Health Hub Guardian",
+  applicationName: "Medafora",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Medafora",
+  },
+  icons: {
+    icon: [
+      { url: "/icon.png" },
+      { url: "/logo.png", sizes: "192x192", type: "image/png" },
+      { url: "/favicon.ico" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: ["/logo.png"],
+  },
 };
 
 import { TooltipProvider } from "@/components/ui/tooltip";
