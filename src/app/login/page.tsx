@@ -1,9 +1,10 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
+import Image from 'next/image'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Lock, Mail, ShieldCheck } from 'lucide-react'
+import { Lock, Mail } from 'lucide-react'
 import { FloatingLabel } from '@/components/shadcn-space/label/label-06'
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -19,12 +20,19 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <div className="min-h-screen flex items-center justify-center bg-[#F8FDFB] p-4">
       <Card className="max-w-md w-full border border-[#2F4858]/15 shadow-sm rounded-2xl bg-white">
         <CardHeader className="text-center pb-2">
-          <div className="mx-auto w-12 h-12 rounded-2xl bg-[#2F4858] text-[#DDFBEF] flex items-center justify-center mb-2 shadow-sm">
-            <ShieldCheck className="w-6 h-6" />
+          <div className="mx-auto size-16 mb-2 flex items-center justify-center">
+            <Image
+              src="/logo.png"
+              alt="Medafora Logo"
+              width={64}
+              height={64}
+              className="size-16 object-contain"
+              priority
+            />
           </div>
-          <CardTitle className="text-2xl font-black text-[#2F4858] tracking-tight">Sign in to MedVault</CardTitle>
+          <CardTitle className="text-2xl font-black text-[#2F4858] tracking-tight">Sign in to Medafora</CardTitle>
           <CardDescription className="text-xs font-semibold text-[#2F4858]/70">
-            Your family's secure digital medicine cabinet
+            Family Medicine, Safety & Health Hub Guardian
           </CardDescription>
         </CardHeader>
         

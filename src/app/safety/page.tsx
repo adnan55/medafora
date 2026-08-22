@@ -79,7 +79,7 @@ export default async function SafetyAuditLogPage({
               Regulatory Safety & Ban Scanner
             </h2>
             <p className="text-xs text-[#2F4858]/70 font-semibold max-w-2xl">
-              MedVault continuously cross-references your medicine cabinet against CDSCO, FDA, and global regulatory gazette notices to detect prohibited or irrational drug combinations.
+              Medafora continuously cross-references your medicine cabinet against CDSCO, FDA, and global regulatory gazette notices to detect prohibited or irrational drug combinations.
             </p>
           </div>
           <form action={async () => {
