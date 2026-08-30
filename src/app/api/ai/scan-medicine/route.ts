@@ -89,7 +89,7 @@ Return ONLY strictly valid JSON.`,
             parts.push({
               inline_data: {
                 mime_type: img.mimeType || 'image/jpeg',
-                data: img.fileBase64.replace(/^data:image\/\w+;base64,/, ''),
+                data: img.fileBase64.replace(/^data:[^;]+;base64,/, ''),
               },
             })
           }

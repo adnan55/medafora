@@ -26,6 +26,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import { createMedicalRecord } from '@/app/actions/medicalRecords'
+import { compressImageForVision } from '@/lib/utils/imageCompressor'
 
 interface AddMedicalRecordModalProps {
   familyMemberId?: string
@@ -117,17 +118,9 @@ export function AddMedicalRecordModal({
       let mimeType = ''
 
       if (file) {
-        mimeType = file.type
-        fileBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader()
-          reader.onload = () => {
-            const result = reader.result as string
-            const base64 = result.split(',')[1]
-            resolve(base64)
-          }
-          reader.onerror = (error) => reject(error)
-          reader.readAsDataURL(file)
-        })
+        const compressed = await compressImageForVision(file, 1600, 1600, 0.82)
+        fileBase64 = compressed.fileBase64.replace(/^data:[^;]+;base64,/, '')
+        mimeType = compressed.mimeType || file.type
       }
 
       const res = await fetch('/api/ai/analyze-report', {
@@ -141,10 +134,19 @@ export function AddMedicalRecordModal({
         }),
       })
 
-      const data = await res.json()
+      const rawText = await res.text()
+      let data: any = null
+      try {
+        data = JSON.parse(rawText)
+      } catch (parseErr) {
+        if (res.status === 413 || rawText.includes('Request Entity Too Large') || rawText.includes('Payload Too Large')) {
+          throw new Error('Selected document/photo is too large. Please upload a smaller file or photo.')
+        }
+        throw new Error(`Server returned error (${res.status}): ${rawText.slice(0, 120)}`)
+      }
 
-      if (!data.success || !data.data) {
-        throw new Error(data.error || 'AI analysis failed')
+      if (!data || !data.success || !data.data) {
+        throw new Error(data?.error || 'AI analysis failed')
       }
 
       const extracted = data.data

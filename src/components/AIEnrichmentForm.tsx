@@ -31,6 +31,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { calculateAge, checkAgeSpecificMedicineAlerts } from '@/lib/utils/ageCalculator'
+import { compressImageForVision } from '@/lib/utils/imageCompressor'
 
 const STORAGE_OPTIONS = [
   'Bedroom Cabinet',
@@ -228,23 +229,15 @@ export function AIEnrichmentForm({
     setScanSuccessSummary(null)
 
     try {
-      // Convert all images to Base64 in parallel
+      // Compress and optimize all photos in parallel to avoid Vercel 4.5MB payload limit
       const imagePayloads = await Promise.all(
         uploadedImages.map(async (img) => {
-          return new Promise<{ fileBase64: string; mimeType: string; label: string }>(
-            (resolve, reject) => {
-              const reader = new FileReader()
-              reader.onload = () => {
-                resolve({
-                  fileBase64: reader.result as string,
-                  mimeType: img.file.type,
-                  label: img.label,
-                })
-              }
-              reader.onerror = reject
-              reader.readAsDataURL(img.file)
-            }
-          )
+          const compressed = await compressImageForVision(img.file, 1600, 1600, 0.82)
+          return {
+            fileBase64: compressed.fileBase64,
+            mimeType: compressed.mimeType || 'image/jpeg',
+            label: img.label,
+          }
         })
       )
 
@@ -257,9 +250,18 @@ export function AIEnrichmentForm({
         }),
       })
 
-      const json = await res.json()
+      const rawText = await res.text()
+      let json: any = null
+      try {
+        json = JSON.parse(rawText)
+      } catch (parseErr) {
+        if (res.status === 413 || rawText.includes('Request Entity Too Large') || rawText.includes('Payload Too Large')) {
+          throw new Error('Selected photos are too large. Please select fewer or lower-resolution photos.')
+        }
+        throw new Error(`Server returned error (${res.status}): ${rawText.slice(0, 120)}`)
+      }
 
-      if (json.success && json.data) {
+      if (json && json.success && json.data) {
         const d = json.data
 
         // Auto-fill extracted values into form
