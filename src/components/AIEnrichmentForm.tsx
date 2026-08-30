@@ -237,10 +237,10 @@ export function AIEnrichmentForm({
     setScanSuccessSummary(null)
 
     try {
-      // Compress and optimize all photos in parallel to ~60KB each to avoid Vercel payload limits
+      // Compress and optimize all photos in parallel to ~35KB each for instant processing
       const imagePayloads = await Promise.all(
         uploadedImages.map(async (img) => {
-          const compressed = await compressImageForVision(img.file, 1024, 1024, 0.72)
+          const compressed = await compressImageForVision(img.file, 800, 800, 0.65)
           return {
             fileBase64: compressed.fileBase64,
             mimeType: compressed.mimeType || 'image/jpeg',

@@ -5,9 +5,9 @@
  */
 export async function compressImageForVision(
   file: File,
-  maxWidth = 1024,
-  maxHeight = 1024,
-  quality = 0.72
+  maxWidth = 800,
+  maxHeight = 800,
+  quality = 0.65
 ): Promise<{ fileBase64: string; mimeType: string }> {
   // If not an image (e.g. PDF), convert directly
   if (!file.type.startsWith('image/') && file.type !== '') {

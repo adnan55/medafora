@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function POST(req: Request) {
@@ -31,28 +32,28 @@ export async function POST(req: Request) {
         const parts: any[] = [
           {
             text: `You are an expert pharmaceutical vision OCR and clinical AI assistant.
-Analyze the uploaded ${images.length} photo(s) of medicine packaging, blister strip front & back, bottle label, box flaps, or prescription.
-Extract and synthesize all visible and clinically inferred details across all uploaded photos into a structured JSON response:
+Analyze the uploaded photo(s) of medicine packaging, blister strips (front/back), bottle label, box flaps, or prescription.
+Extract all visible and clinically inferred details into a structured JSON response:
 
 Schema:
-- medicine_name: Exact brand name on the pack (e.g. "Augmentin 625 Duo", "Calpol 650", "Allegra 120mg", "Pan-D", "Azithral 500", "Benadryl Syrup")
-- generic_name: Common generic name (e.g. "Amoxicillin and Potassium Clavulanate", "Paracetamol", "Fexofenadine Hydrochloride")
-- salt_composition: Full active pharmaceutical ingredient(s) and strength (e.g. "Amoxicillin 500mg + Potassium Clavulanate 125mg", "Paracetamol 650mg")
-- brand_or_manufacturer: Pharmaceutical manufacturer or marketer (e.g. "GlaxoSmithKline", "Micro Labs", "Sanofi", "Cipla", "Sun Pharma", "Abbott")
+- medicine_name: Exact brand name on the pack (e.g. "Augmentin 625 Duo", "Calpol 650", "Allegra 120mg", "Pan-D", "Azithral 500")
+- generic_name: Common generic name
+- salt_composition: Full active pharmaceutical ingredient(s) and strength (e.g. "Amoxicillin 500mg + Potassium Clavulanate 125mg")
+- brand_or_manufacturer: Pharmaceutical manufacturer or marketer (e.g. "GSK", "Micro Labs", "Cipla", "Sun Pharma")
 - dosage_form: One of ["TABLET", "CAPSULE", "SYRUP", "OINTMENT", "DROPS", "INHALER", "CREAM", "GEL", "INJECTION", "POWDER / SACHET"]
-- strength: Dosage strength (e.g. "625mg", "650mg", "120mg", "10mg/5ml")
+- strength: Dosage strength (e.g. "625mg", "650mg", "10mg/5ml")
 - expiry_date: Expiry date in YYYY-MM-DD format (if written as EXP 11/27 or Nov 2027, use last day of month like 2027-11-30)
 - manufacture_date: Manufacturing date in YYYY-MM-DD format if visible, or null
 - batch_number: Batch / Lot number if printed (e.g. "B24098"), or null
-- quantity: Estimated count of tablets/capsules or volume (e.g. 10, 15, 100)
+- quantity: Estimated count of tablets/capsules or volume (number)
 - unit: "TABLETS", "CAPSULES", "STRIPS", "BOTTLE (ML)", "TUBE (G)", etc.
 - storage_location: Recommended storage spot from ["Bedroom Cabinet", "Refrigerator Door (2-8°C)", "Bathroom Mirror Box", "Kitchen Pantry Top Shelf", "First-Aid Kit (Travel)", "Living Room Sideboard"]
-- primary_uses: 1-2 sentence clear clinical explanation of what symptoms or conditions this medicine treats
-- dosage_instructions: Standard administration advice (e.g. "Take 1 tablet after food with water. Complete full course.")
-- target_diseases: Array of disease tags (e.g. ["Bacterial Infection", "Fever", "Pain Relief"])
-- precautions: Important warnings (e.g. "Avoid alcohol", "Take after food", "May cause dizziness")
-- is_prescription_required: boolean (true for antibiotics/scheduled drugs, false for OTC)
-- is_daily_routine: boolean (true if typical chronic daily med like BP/sugar, false for acute/SOS like painkillers/antibiotics)
+- primary_uses: 1-2 sentence clear clinical explanation of what symptoms or conditions this treats
+- dosage_instructions: Standard administration directions (e.g. "Take 1 tablet after food with water")
+- target_diseases: Array of disease tags (e.g. ["Bacterial Infection", "Fever"])
+- precautions: Important warnings (e.g. "Avoid alcohol", "Take after food")
+- is_prescription_required: boolean
+- is_daily_routine: boolean
 - confidence_score: integer 0-100 reflecting OCR clarity
 
 Return ONLY strictly valid JSON.`,
@@ -63,7 +64,7 @@ Return ONLY strictly valid JSON.`,
           parts.push({ text: `Additional notes from user: ${notes}` })
         }
 
-        // Add all image parts (using REST API v1beta inline_data snake_case format)
+        // Add all image parts (REST API v1beta inline_data format)
         images.forEach((img: any) => {
           if (img.fileBase64) {
             const rawData = String(img.fileBase64).replace(/^data:[^;]+;base64,/, '')
@@ -78,10 +79,13 @@ Return ONLY strictly valid JSON.`,
           }
         })
 
-        // Call Gemini 2.0 Flash / 1.5 Flash / 2.5 Flash / 3.7 Flash
-        const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.7-flash']
+        // Prioritize gemini-2.0-flash (fastest GA model) then gemini-1.5-flash
+        const models = ['gemini-2.0-flash', 'gemini-1.5-flash']
         for (const model of models) {
           try {
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 14000)
+
             const geminiRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
               {
@@ -91,10 +95,14 @@ Return ONLY strictly valid JSON.`,
                   contents: [{ role: 'user', parts }],
                   generationConfig: {
                     response_mime_type: 'application/json',
+                    temperature: 0.1,
                   },
                 }),
+                signal: controller.signal,
               }
             )
+
+            clearTimeout(timeoutId)
 
             if (geminiRes.ok) {
               const geminiData = await geminiRes.json()
@@ -109,7 +117,7 @@ Return ONLY strictly valid JSON.`,
               console.warn(lastError)
             }
           } catch (modelErr: any) {
-            lastError = `Model ${model} fetch exception: ${modelErr.message}`
+            lastError = `Model ${model} request error: ${modelErr.message}`
             console.warn(lastError)
           }
         }
@@ -121,7 +129,7 @@ Return ONLY strictly valid JSON.`,
       lastError = 'GEMINI_API_KEY is not set in environment variables.'
     }
 
-    // 2. Try Supabase Edge Function fallback
+    // 2. Try Supabase Edge Function fallback if direct call failed
     try {
       const supabase = await createClient()
       const { data: edgeData, error: edgeError } = await supabase.functions.invoke(
@@ -142,18 +150,14 @@ Return ONLY strictly valid JSON.`,
       if (!edgeError && edgeData?.success && edgeData?.data) {
         return NextResponse.json({ success: true, data: edgeData.data })
       }
-      if (edgeError) {
-        console.warn('Edge Function fallback error:', edgeError)
-      }
     } catch (edgeErr) {
       console.warn('Edge Function invoke fallback:', edgeErr)
     }
 
-    // Return explicit error so user knows what to configure rather than misleading mock data
     return NextResponse.json(
       {
         success: false,
-        error: `AI Medicine Scan could not process the photo. ${lastError || 'Please check your GEMINI_API_KEY in Vercel settings.'}`,
+        error: `AI Medicine Scan failed: ${lastError || 'Timeout or invalid response from AI service. Please try again.'}`,
       },
       { status: 500 }
     )
