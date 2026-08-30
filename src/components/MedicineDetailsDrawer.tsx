@@ -141,6 +141,11 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
                 <p className="text-[10px] text-[#2F4858]/70 pt-0.5">
                   Exp: {new Date(medicine.expiry_date).toLocaleDateString()}
                 </p>
+                {medicine.manufacture_date && (
+                  <p className="text-[9px] text-[#2F4858]/60">
+                    MFG: {new Date(medicine.manufacture_date).toLocaleDateString()}
+                  </p>
+                )}
               </div>
 
               <div className="p-3 rounded-2xl border border-[#2F4858]/10 bg-[#F8FDFB] space-y-1">
@@ -152,8 +157,20 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
                 <p className="text-[10px] text-[#2F4858]/70 pt-0.5">
                   Qty: {medicine.quantity} {medicine.unit || "units"}
                 </p>
+                {medicine.batch_number && (
+                  <p className="text-[9px] font-mono text-[#2F4858]/60">
+                    Batch: {medicine.batch_number}
+                  </p>
+                )}
               </div>
             </div>
+
+            {medicine.brand_or_manufacturer && (
+              <div className="p-2.5 px-3 rounded-xl bg-white border border-[#2F4858]/15 text-xs font-bold text-[#2F4858] flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase text-[#2F4858]/60">Manufacturer</span>
+                <span>{medicine.brand_or_manufacturer}</span>
+              </div>
+            )}
 
             <Separator className="bg-[#2F4858]/10" />
 
