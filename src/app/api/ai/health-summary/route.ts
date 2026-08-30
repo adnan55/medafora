@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { calculateAge, checkAgeSpecificMedicineAlerts } from '@/lib/utils/ageCalculator'
+import { generateGeminiContent } from '@/lib/utils/geminiClient'
 
 export const maxDuration = 60 // Allow sufficient execution time for AI synthesis
 
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
       process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
-    // 1. Try Direct Google Gemini 2.0 Flash Synthesis
+    // 1. Try Direct Google Gemini Call with Dynamic Model Discovery
     if (geminiKey) {
       try {
         const prompt = `You are a world-class preventative clinical health intelligence engine.
@@ -92,36 +93,11 @@ Return strictly valid JSON:
   }
 }`
 
-        const models = ['gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
-        for (const model of models) {
-          try {
-            const geminiRes = await fetch(
-              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                  generationConfig: {
-                    response_mime_type: 'application/json',
-                  },
-                }),
-              }
-            )
-
-            if (geminiRes.ok) {
-              const json = await geminiRes.json()
-              const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-              if (text) {
-                aiGeneratedInsights = JSON.parse(text)
-                break
-              }
-            }
-          } catch (modelErr) {
-            console.warn(`Model ${model} health summary error:`, modelErr)
-          }
+        const parsed = await generateGeminiContent([{ text: prompt }], geminiKey)
+        if (parsed) {
+          aiGeneratedInsights = parsed
         }
-      } catch (geminiErr) {
+      } catch (geminiErr: any) {
         console.warn('Direct Gemini Health Summary Error:', geminiErr)
       }
     }
