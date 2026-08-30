@@ -92,25 +92,33 @@ Return strictly valid JSON:
   }
 }`
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: prompt }] }],
-              generationConfig: {
-                response_mime_type: 'application/json',
-              },
-            }),
-          }
-        )
+        const models = ['gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        for (const model of models) {
+          try {
+            const geminiRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                  generationConfig: {
+                    response_mime_type: 'application/json',
+                  },
+                }),
+              }
+            )
 
-        if (geminiRes.ok) {
-          const json = await geminiRes.json()
-          const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-          if (text) {
-            aiGeneratedInsights = JSON.parse(text)
+            if (geminiRes.ok) {
+              const json = await geminiRes.json()
+              const text = json.candidates?.[0]?.content?.parts?.[0]?.text
+              if (text) {
+                aiGeneratedInsights = JSON.parse(text)
+                break
+              }
+            }
+          } catch (modelErr) {
+            console.warn(`Model ${model} health summary error:`, modelErr)
           }
         }
       } catch (geminiErr) {

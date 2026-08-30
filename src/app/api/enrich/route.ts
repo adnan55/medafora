@@ -33,26 +33,33 @@ Return a strictly valid JSON object matching this schema:
   "precautions": "Crucial safety warnings (e.g. Avoid alcohol, liver caution)"
 }`
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: prompt }] }],
-              generationConfig: {
-                response_mime_type: 'application/json',
-              },
-            }),
-          }
-        )
+        const models = ['gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        for (const model of models) {
+          try {
+            const geminiRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                  generationConfig: {
+                    response_mime_type: 'application/json',
+                  },
+                }),
+              }
+            )
 
-        if (geminiRes.ok) {
-          const json = await geminiRes.json()
-          const text = json.candidates?.[0]?.content?.parts?.[0]?.text
-          if (text) {
-            const parsed = JSON.parse(text)
-            return NextResponse.json({ success: true, data: parsed })
+            if (geminiRes.ok) {
+              const json = await geminiRes.json()
+              const text = json.candidates?.[0]?.content?.parts?.[0]?.text
+              if (text) {
+                const parsed = JSON.parse(text)
+                return NextResponse.json({ success: true, data: parsed })
+              }
+            }
+          } catch (modelErr) {
+            console.warn(`Model ${model} enrich error:`, modelErr)
           }
         }
       } catch (geminiErr) {

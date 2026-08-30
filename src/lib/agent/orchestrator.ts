@@ -18,7 +18,7 @@ import { recordClinicalMemoryTool, recallPatientMemoriesTool, LOAD_MEMORY } from
 export const rootAgent = new Agent({
   name: 'MedaforaOrchestratorAgent',
   description: 'Master clinical intelligence orchestrator for Medafora Family Medicine & Health Guardian with continuous Supabase patient memory.',
-  model: 'gemini-2.0-flash',
+  model: 'gemini-3.7-flash',
   instruction: `You are the Master Clinical Intelligence Orchestrator for Medafora (Family Medicine, Safety & AI Health Guardian).
 You coordinate specialized AI sub-agents with continuous patient memory stored in Supabase:
 

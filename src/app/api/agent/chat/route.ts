@@ -156,50 +156,57 @@ Return a JSON object:
 }`
 
     if (geminiKey) {
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
-            generationConfig: {
-              response_mime_type: 'application/json',
-            },
-          }),
-        }
-      )
-
-      if (geminiRes.ok) {
-        const geminiData = await geminiRes.json()
-        const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
-        if (text) {
-          const parsed = JSON.parse(text)
-
-          // 4. If AI detected a new significant memory to save, persist directly to Supabase DB!
-          if (parsed.new_memory_to_save && familyMemberId) {
-            try {
-              const mem = parsed.new_memory_to_save
-              await supabase.from('patient_clinical_memories').insert([
-                {
-                  user_id: user.id,
-                  family_member_id: familyMemberId,
-                  category: mem.category || 'DIAGNOSTIC_ANOMALY',
-                  headline: mem.headline,
-                  details: mem.details,
-                  underlying_reason_or_mechanism: mem.underlying_reason_or_mechanism,
-                  recommended_actions: mem.recommended_actions,
+      const models = ['gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+      for (const model of models) {
+        try {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+                generationConfig: {
+                  response_mime_type: 'application/json',
                 },
-              ])
-            } catch (saveErr) {
-              console.warn('Auto-memory save error:', saveErr)
+              }),
+            }
+          )
+
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json()
+            const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
+            if (text) {
+              const parsed = JSON.parse(text)
+
+              // 4. If AI detected a new significant memory to save, persist directly to Supabase DB!
+              if (parsed.new_memory_to_save && familyMemberId) {
+                try {
+                  const mem = parsed.new_memory_to_save
+                  await supabase.from('patient_clinical_memories').insert([
+                    {
+                      user_id: user.id,
+                      family_member_id: familyMemberId,
+                      category: mem.category || 'DIAGNOSTIC_ANOMALY',
+                      headline: mem.headline,
+                      details: mem.details,
+                      underlying_reason_or_mechanism: mem.underlying_reason_or_mechanism,
+                      recommended_actions: mem.recommended_actions,
+                    },
+                  ])
+                } catch (saveErr) {
+                  console.warn('Auto-memory save error:', saveErr)
+                }
+              }
+
+              return NextResponse.json({
+                success: true,
+                data: parsed,
+              })
             }
           }
-
-          return NextResponse.json({
-            success: true,
-            data: parsed,
-          })
+        } catch (modelErr) {
+          console.warn(`Model ${model} agent chat error:`, modelErr)
         }
       }
     }

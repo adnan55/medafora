@@ -6,7 +6,7 @@ import { checkDrugSafetyAndAllergiesTool } from '../tools/patientHealthTools'
 export const regulatorySafetyAgent = new Agent({
   name: 'RegulatorySafetyAgent',
   description: 'Specialist in pharmacovigilance, regulatory drug bans, CDSCO gazette notices, irrational fixed-dose combinations (FDCs), and recall audits.',
-  model: 'gemini-2.0-flash',
+  model: 'gemini-3.7-flash',
   instruction: `You are the Regulatory Safety & Pharmacovigilance Auditor for Medafora.
 Your responsibility is to actively protect families from banned, withdrawn, recalled, or irrational fixed-dose combination (FDC) drugs:
 1. Continuous Regulatory Audit:

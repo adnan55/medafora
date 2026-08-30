@@ -6,7 +6,7 @@ import { recordClinicalMemoryTool, recallPatientMemoriesTool } from '../tools/cl
 export const diagnosticReportAgent = new Agent({
   name: 'DiagnosticReportAgent',
   description: 'Specialist in medical lab reports, pathology blood tests, imaging interpretation, biomarker reference ranges, and longitudinal clinical memory retention.',
-  model: 'gemini-2.0-flash',
+  model: 'gemini-3.7-flash',
   instruction: `You are the Diagnostic Lab Report & Clinical Document Specialist for Medafora.
 Your responsibility is to analyze medical documents (pathology tests, blood panels, metabolic panels, lipid profiles, imaging scans, discharge summaries, and prescription notes) and extract:
 1. Professional Document Title & Record Type (LAB_REPORT, DIAGNOSIS, PRESCRIPTION, IMAGING, etc.)

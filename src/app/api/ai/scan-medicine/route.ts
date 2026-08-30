@@ -76,8 +76,8 @@ Return ONLY strictly valid JSON.`,
           }
         })
 
-        // Call Gemini 2.0 Flash / 1.5 Flash
-        const models = ['gemini-2.0-flash', 'gemini-1.5-flash']
+        // Call Gemini 3.7 Flash / 2.5 Flash / 2.0 Flash / 1.5 Flash
+        const models = ['gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
         for (const model of models) {
           try {
             const geminiRes = await fetch(

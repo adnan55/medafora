@@ -8,7 +8,7 @@ import { queryBannedDrugsListTool } from '../tools/safetyScanTools'
 export const medicineVisionAgent = new Agent({
   name: 'MedicineVisionAgent',
   description: 'Specialist in multi-photo medicine packaging OCR, pharmaceutical formulation recognition, batch & expiry parsing, and dosage instructions.',
-  model: 'gemini-2.0-flash',
+  model: 'gemini-3.7-flash',
   instruction: `You are the Medicine Vision & Pharmaceutical Recognition Specialist for Medafora.
 Your responsibility is to analyze text, packaging photos (front of box/strip, back with expiry/batch, side flaps, bottle labels, or prescriptions) and extract:
 1. Exact Brand Name (e.g. Augmentin 625 Duo, Calpol 650, Pan-D, Allegra 120)
