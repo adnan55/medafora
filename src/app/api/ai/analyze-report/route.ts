@@ -58,8 +58,8 @@ Return strictly valid JSON conforming to the schema.`,
           const rawData = String(fileBase64).replace(/^data:[^;]+;base64,/, '')
           if (rawData.trim()) {
             parts.push({
-              inlineData: {
-                mimeType: mimeType || 'image/jpeg',
+              inline_data: {
+                mime_type: mimeType || 'image/jpeg',
                 data: rawData,
               },
             })

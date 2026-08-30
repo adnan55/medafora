@@ -24,6 +24,8 @@ export async function POST(req: Request) {
       process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
+    let lastError = ''
+
     if (geminiKey && images.length > 0) {
       try {
         const parts: any[] = [
@@ -61,14 +63,14 @@ Return ONLY strictly valid JSON.`,
           parts.push({ text: `Additional notes from user: ${notes}` })
         }
 
-        // Add all image parts (using standard inlineData schema)
+        // Add all image parts (using REST API v1beta inline_data snake_case format)
         images.forEach((img: any) => {
           if (img.fileBase64) {
             const rawData = String(img.fileBase64).replace(/^data:[^;]+;base64,/, '')
             if (rawData.trim()) {
               parts.push({
-                inlineData: {
-                  mimeType: img.mimeType || 'image/jpeg',
+                inline_data: {
+                  mime_type: img.mimeType || 'image/jpeg',
                   data: rawData,
                 },
               })
@@ -76,8 +78,8 @@ Return ONLY strictly valid JSON.`,
           }
         })
 
-        // Call Gemini 3.7 Flash / 2.5 Flash / 2.0 Flash / 1.5 Flash
-        const models = ['gemini-3.7-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash']
+        // Call Gemini 2.0 Flash / 1.5 Flash / 2.5 Flash / 3.7 Flash
+        const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-flash', 'gemini-3.7-flash']
         for (const model of models) {
           try {
             const geminiRes = await fetch(
@@ -101,14 +103,22 @@ Return ONLY strictly valid JSON.`,
                 const parsed = JSON.parse(text)
                 return NextResponse.json({ success: true, data: parsed })
               }
+            } else {
+              const errText = await geminiRes.text()
+              lastError = `Model ${model} error (${geminiRes.status}): ${errText}`
+              console.warn(lastError)
             }
-          } catch (modelErr) {
-            console.warn(`Model ${model} failed, trying fallback:`, modelErr)
+          } catch (modelErr: any) {
+            lastError = `Model ${model} fetch exception: ${modelErr.message}`
+            console.warn(lastError)
           }
         }
-      } catch (geminiErr) {
+      } catch (geminiErr: any) {
+        lastError = geminiErr.message
         console.error('Direct Gemini Vision API error:', geminiErr)
       }
+    } else if (!geminiKey) {
+      lastError = 'GEMINI_API_KEY is not set in environment variables.'
     }
 
     // 2. Try Supabase Edge Function fallback
@@ -132,38 +142,21 @@ Return ONLY strictly valid JSON.`,
       if (!edgeError && edgeData?.success && edgeData?.data) {
         return NextResponse.json({ success: true, data: edgeData.data })
       }
+      if (edgeError) {
+        console.warn('Edge Function fallback error:', edgeError)
+      }
     } catch (edgeErr) {
       console.warn('Edge Function invoke fallback:', edgeErr)
     }
 
-    // 3. Fallback Smart Extractor
-    const parsedData = {
-      medicine_name: notes ? notes.split('\n')[0] : 'Scanned Medicine',
-      generic_name: 'Identified Active Formulation',
-      salt_composition: 'Active Pharmaceutical Ingredients',
-      brand_or_manufacturer: 'Pharmaceutical Manufacturer',
-      dosage_form: 'TABLET',
-      strength: '500mg',
-      expiry_date: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      manufacture_date: new Date().toISOString().split('T')[0],
-      batch_number: 'BATCH-' + Math.floor(1000 + Math.random() * 9000),
-      quantity: 10,
-      unit: 'TABLETS',
-      storage_location: 'Bedroom Cabinet',
-      primary_uses: 'Symptomatic relief and therapeutic treatment.',
-      dosage_instructions: 'Take as directed by your physician with water after food.',
-      target_diseases: ['General Care', 'Symptomatic Relief'],
-      precautions: 'Store in a cool, dry place away from direct sunlight.',
-      is_prescription_required: false,
-      is_daily_routine: false,
-      confidence_score: 75,
-    }
-
-    return NextResponse.json({
-      success: true,
-      data: parsedData,
-      note: 'AI photo scanned. Please verify and adjust any fields before saving.',
-    })
+    // Return explicit error so user knows what to configure rather than misleading mock data
+    return NextResponse.json(
+      {
+        success: false,
+        error: `AI Medicine Scan could not process the photo. ${lastError || 'Please check your GEMINI_API_KEY in Vercel settings.'}`,
+      },
+      { status: 500 }
+    )
   } catch (error: any) {
     console.error('Scan Medicine Route Error:', error)
     return NextResponse.json(
