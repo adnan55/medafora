@@ -94,7 +94,11 @@ export async function POST(req: Request) {
         : 'No diagnostic lab reports recorded.'
 
     // 3. Call Google Gemini 2.0 Flash with Multidisciplinary Agent System Prompt
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    const geminiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
     const systemPrompt = `You are the Medafora Clinical AI Multi-Agent Intelligence System (incorporating MedicineVisionAgent, DiagnosticReportAgent, FamilyHealthGuardianAgent, and RegulatorySafetyAgent).
 

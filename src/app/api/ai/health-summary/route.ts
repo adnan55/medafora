@@ -59,40 +59,100 @@ export async function POST(req: Request) {
       })
     })
 
-    // Try to invoke Supabase AI Edge Function or Gemini API if available
     let aiGeneratedInsights: any = null
-    try {
-      const supabase = await createClient()
-      const { data: edgeData, error: edgeError } = await supabase.functions.invoke(
-        'analyze-medical-report',
-        {
-          body: {
-            task: 'PATIENT_HEALTH_SUMMARY',
-            member: {
-              ...member,
-              age: ageInfo?.formatted || 'Unknown',
-              lifeStage: ageInfo?.lifeStageLabel || 'Adult',
-            },
-            medicines: medicines.map((m: any) => ({
-              name: m.medicine_name,
-              salts: m.salt_composition,
-              uses: m.primary_uses,
-              dosage: m.dosage_instructions,
-              expiry: m.expiry_date,
-            })),
-            diagnoses: medicalRecords.map((r: any) => r.diagnosis).filter(Boolean),
-            abnormalBiomarkers: abnormalBiomarkers.map((b) => `${b.name}: ${b.value} ${b.unit} (${b.status})`),
-            vitals: vitalLogs.slice(-6).map((v: any) => `${v.vital_type}: ${v.value}${v.value_secondary ? `/${v.value_secondary}` : ''} ${v.unit} (${v.context || 'general'})`),
-            customQuery: customQuery || undefined,
-          },
-        }
-      )
 
-      if (!edgeError && edgeData?.success && edgeData?.data) {
-        aiGeneratedInsights = edgeData.data
+    const geminiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY
+
+    // 1. Try Direct Google Gemini 2.0 Flash Synthesis
+    if (geminiKey) {
+      try {
+        const prompt = `You are a world-class preventative clinical health intelligence engine.
+Synthesize the complete health record for ${member.full_name}:
+- Age: ${ageInfo?.formatted || 'Unknown'} (${ageInfo?.lifeStageLabel || 'Adult'})
+- Allergies: ${memberAllergies.length > 0 ? memberAllergies.join(', ') : 'None'}
+- Chronic Conditions: ${Array.isArray(member.chronic_conditions) ? member.chronic_conditions.join(', ') : 'None'}
+- Active Medicines: ${medicines.map((m: any) => `${m.medicine_name} (${m.salt_composition || ''})`).join(', ') || 'None'}
+- Abnormal Biomarkers: ${abnormalBiomarkers.map((b) => `${b.name}: ${b.value} ${b.unit} (${b.status})`).join(', ') || 'None'}
+- Vitals: ${vitalLogs.slice(-6).map((v: any) => `${v.vital_type}: ${v.value} ${v.unit}`).join(', ') || 'None'}
+${customQuery ? `- User Question: "${customQuery}"` : ''}
+
+Return strictly valid JSON:
+{
+  "clinical_overview": "2-3 sentence clinical synthesis of patient overall status",
+  "biomarker_highlights": ["Highlight 1", "Highlight 2"],
+  "medication_evaluation": "Clinical review of current active cabinet medications",
+  "vitals_trend_summary": "Summary of at-home glucose/BP trends",
+  "actionable_recommendations": ["Recommendation 1", "Recommendation 2"],
+  "doctor_discussion_guide": ["Question 1 to ask physician", "Question 2 to ask physician"]${
+    customQuery ? ',\n  "custom_answer": "Direct answer to user question"' : ''
+  }
+}`
+
+        const geminiRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: {
+                response_mime_type: 'application/json',
+              },
+            }),
+          }
+        )
+
+        if (geminiRes.ok) {
+          const json = await geminiRes.json()
+          const text = json.candidates?.[0]?.content?.parts?.[0]?.text
+          if (text) {
+            aiGeneratedInsights = JSON.parse(text)
+          }
+        }
+      } catch (geminiErr) {
+        console.warn('Direct Gemini Health Summary Error:', geminiErr)
       }
-    } catch (edgeErr) {
-      console.warn('Edge Function fallback to local Clinical AI engine:', edgeErr)
+    }
+
+    // 2. Try Supabase AI Edge Function fallback
+    if (!aiGeneratedInsights) {
+      try {
+        const supabase = await createClient()
+        const { data: edgeData, error: edgeError } = await supabase.functions.invoke(
+          'analyze-medical-report',
+          {
+            body: {
+              task: 'PATIENT_HEALTH_SUMMARY',
+              member: {
+                ...member,
+                age: ageInfo?.formatted || 'Unknown',
+                lifeStage: ageInfo?.lifeStageLabel || 'Adult',
+              },
+              medicines: medicines.map((m: any) => ({
+                name: m.medicine_name,
+                salts: m.salt_composition,
+                uses: m.primary_uses,
+                dosage: m.dosage_instructions,
+                expiry: m.expiry_date,
+              })),
+              diagnoses: medicalRecords.map((r: any) => r.diagnosis).filter(Boolean),
+              abnormalBiomarkers: abnormalBiomarkers.map((b) => `${b.name}: ${b.value} ${b.unit} (${b.status})`),
+              vitals: vitalLogs.slice(-6).map((v: any) => `${v.vital_type}: ${v.value}${v.value_secondary ? `/${v.value_secondary}` : ''} ${v.unit} (${v.context || 'general'})`),
+              customQuery: customQuery || undefined,
+            },
+          }
+        )
+
+        if (!edgeError && edgeData?.success && edgeData?.data) {
+          aiGeneratedInsights = edgeData.data
+        }
+      } catch (edgeErr) {
+        console.warn('Edge Function fallback to local Clinical AI engine:', edgeErr)
+      }
     }
 
     // High-Precision Clinical Synthesis Engine (Deterministic + AI hybrid)
