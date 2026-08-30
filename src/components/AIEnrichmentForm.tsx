@@ -185,12 +185,20 @@ export function AIEnrichmentForm({
   })()
 
   // Handle Multi-Image Selection
-  const handleAddFiles = (files: FileList | null) => {
+  const handleAddFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return
 
+    const fileArray = Array.from(files)
     const newItems: UploadedImageItem[] = []
-    Array.from(files).forEach((file, idx) => {
-      if (file.type.startsWith('image/')) {
+
+    for (let idx = 0; idx < fileArray.length; idx++) {
+      const file = fileArray[idx]
+      const isImg =
+        file.type.startsWith('image/') ||
+        Boolean(file.name?.match(/\.(jpg|jpeg|png|webp|heic|heif|bmp|gif)$/i)) ||
+        file.type === ''
+
+      if (isImg) {
         const totalCount = uploadedImages.length + newItems.length + 1
         const defaultLabel =
           totalCount === 1
@@ -206,7 +214,7 @@ export function AIEnrichmentForm({
           label: defaultLabel,
         })
       }
-    })
+    }
 
     setUploadedImages((prev) => [...prev, ...newItems])
     setScanError(null)
@@ -229,10 +237,10 @@ export function AIEnrichmentForm({
     setScanSuccessSummary(null)
 
     try {
-      // Compress and optimize all photos in parallel to avoid Vercel 4.5MB payload limit
+      // Compress and optimize all photos in parallel to ~60KB each to avoid Vercel payload limits
       const imagePayloads = await Promise.all(
         uploadedImages.map(async (img) => {
-          const compressed = await compressImageForVision(img.file, 1600, 1600, 0.82)
+          const compressed = await compressImageForVision(img.file, 1024, 1024, 0.72)
           return {
             fileBase64: compressed.fileBase64,
             mimeType: compressed.mimeType || 'image/jpeg',

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-export const maxDuration = 60 // Allow sufficient time for multi-image Gemini Vision OCR
+export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
@@ -17,34 +17,12 @@ export async function POST(req: Request) {
       }
     }
 
-    const supabase = await createClient()
-
-    // 1. Try invoking the Supabase Edge Function
-    try {
-      const { data: edgeData, error: edgeError } = await supabase.functions.invoke(
-        'analyze-medical-report',
-        {
-          body: {
-            task: 'MEDICINE_MULTI_IMAGE_SCAN',
-            images: images.map((img: any) => ({
-              fileBase64: img.fileBase64,
-              mimeType: img.mimeType || 'image/jpeg',
-              label: img.label || 'Medicine packaging',
-            })),
-            notes,
-          },
-        }
-      )
-
-      if (!edgeError && edgeData?.success && edgeData?.data) {
-        return NextResponse.json({ success: true, data: edgeData.data })
-      }
-    } catch (edgeErr) {
-      console.warn('Edge Function invoke fallback:', edgeErr)
-    }
-
-    // 2. Direct Google Gemini 2.0 / 1.5 Flash Vision API (if GEMINI_API_KEY is available)
-    const geminiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_GENERATIVE_AI_API_KEY
+    // 1. Check Gemini API Key from environment variables
+    const geminiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
     if (geminiKey && images.length > 0) {
       try {
@@ -83,38 +61,49 @@ Return ONLY strictly valid JSON.`,
           parts.push({ text: `Additional notes from user: ${notes}` })
         }
 
-        // Add all image parts
-        images.forEach((img: any, idx: number) => {
+        // Add all image parts (using standard inlineData schema)
+        images.forEach((img: any) => {
           if (img.fileBase64) {
-            parts.push({
-              inline_data: {
-                mime_type: img.mimeType || 'image/jpeg',
-                data: img.fileBase64.replace(/^data:[^;]+;base64,/, ''),
-              },
-            })
+            const rawData = String(img.fileBase64).replace(/^data:[^;]+;base64,/, '')
+            if (rawData.trim()) {
+              parts.push({
+                inlineData: {
+                  mimeType: img.mimeType || 'image/jpeg',
+                  data: rawData,
+                },
+              })
+            }
           }
         })
 
-        const geminiRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts }],
-              generationConfig: {
-                response_mime_type: 'application/json',
-              },
-            }),
-          }
-        )
+        // Call Gemini 2.0 Flash / 1.5 Flash
+        const models = ['gemini-2.0-flash', 'gemini-1.5-flash']
+        for (const model of models) {
+          try {
+            const geminiRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  contents: [{ role: 'user', parts }],
+                  generationConfig: {
+                    response_mime_type: 'application/json',
+                  },
+                }),
+              }
+            )
 
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json()
-          const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
-          if (text) {
-            const parsed = JSON.parse(text)
-            return NextResponse.json({ success: true, data: parsed })
+            if (geminiRes.ok) {
+              const geminiData = await geminiRes.json()
+              const text = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
+              if (text) {
+                const parsed = JSON.parse(text)
+                return NextResponse.json({ success: true, data: parsed })
+              }
+            }
+          } catch (modelErr) {
+            console.warn(`Model ${model} failed, trying fallback:`, modelErr)
           }
         }
       } catch (geminiErr) {
@@ -122,8 +111,32 @@ Return ONLY strictly valid JSON.`,
       }
     }
 
+    // 2. Try Supabase Edge Function fallback
+    try {
+      const supabase = await createClient()
+      const { data: edgeData, error: edgeError } = await supabase.functions.invoke(
+        'analyze-medical-report',
+        {
+          body: {
+            task: 'MEDICINE_MULTI_IMAGE_SCAN',
+            images: images.map((img: any) => ({
+              fileBase64: String(img.fileBase64).replace(/^data:[^;]+;base64,/, ''),
+              mimeType: img.mimeType || 'image/jpeg',
+              label: img.label || 'Medicine packaging',
+            })),
+            notes,
+          },
+        }
+      )
+
+      if (!edgeError && edgeData?.success && edgeData?.data) {
+        return NextResponse.json({ success: true, data: edgeData.data })
+      }
+    } catch (edgeErr) {
+      console.warn('Edge Function invoke fallback:', edgeErr)
+    }
+
     // 3. Fallback Smart Extractor
-    // If photos are provided without active Gemini key, provide intelligent heuristics
     const parsedData = {
       medicine_name: notes ? notes.split('\n')[0] : 'Scanned Medicine',
       generic_name: 'Identified Active Formulation',
