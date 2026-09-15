@@ -6,23 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { 
   ShieldAlert, 
   Search, 
   AlertTriangle,
   Ban,
   HelpCircle,
-  ShieldCheck,
 } from 'lucide-react'
 import { DeepAuditScanButton } from '@/components/DeepAuditScanButton'
+import { AuditLogTable } from '@/components/AuditLogTable'
 import { runSafetyAudit } from '@/app/actions/safety'
 
 export default async function SafetyAuditLogPage({
@@ -146,63 +138,7 @@ export default async function SafetyAuditLogPage({
 
         {/* Audit Logs Trail Table with shadcn Table */}
         <Card className="rounded-2xl border-[#2F4858]/15 bg-white shadow-sm overflow-hidden">
-          <Table>
-            <TableHeader className="bg-[#F8FDFB] text-[#2F4858]/70 uppercase text-[10px] font-extrabold border-b border-[#2F4858]/15">
-              <TableRow>
-                <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Medicine & Salt</TableHead>
-                <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Scan Date</TableHead>
-                <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Verdict</TableHead>
-                <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Regulatory Findings & Notice</TableHead>
-                <TableHead className="px-4 py-3 text-right font-extrabold text-[#2F4858]">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="divide-y divide-[#2F4858]/10 text-xs">
-              {logs && logs.length > 0 ? (
-                logs.map((log) => (
-                  <TableRow key={log.id} className="hover:bg-[#DDFBEF]/20 transition-colors">
-                    <TableCell className="px-4 py-3 font-semibold text-[#2F4858]">
-                      <p className="font-extrabold">{log.medicines?.medicine_name}</p>
-                      <p className="text-[11px] text-[#2F4858]/80 font-medium truncate max-w-[200px]">
-                        {log.medicines?.salt_composition}
-                      </p>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-[#2F4858]/70 whitespace-nowrap font-medium">
-                      {new Date(log.checked_at).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 whitespace-nowrap">
-                      {log.result_status === 'BANNED' ? (
-                        <Badge variant="destructive" className="font-black text-[10px] uppercase px-2 py-0.5 rounded-full">
-                          BANNED
-                        </Badge>
-                      ) : log.result_status === 'WARNING' ? (
-                        <Badge variant="outline" className="font-bold text-[10px] bg-amber-100 text-amber-800 border-amber-200 px-2 py-0.5 rounded-full">
-                          WARNING
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="font-bold text-[10px] bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8] px-2 py-0.5 rounded-full">
-                          CLEARED
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-[#2F4858]/90 max-w-md">
-                      <p className="line-clamp-2">{log.summary}</p>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-right whitespace-nowrap">
-                      <Button render={<Link href={`/medicines/${log.medicine_id}`} />} variant="ghost" size="sm" className="text-xs font-bold text-[#2F4858] hover:bg-[#DDFBEF] rounded-lg">
-                        Inspect
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="px-4 py-8 text-center text-[#2F4858]/50 text-xs font-medium">
-                    No audit logs found. Run a deep scan to get started.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+          <AuditLogTable logs={logs as any} />
         </Card>
 
         {/* Educational Knowledge Card */}
