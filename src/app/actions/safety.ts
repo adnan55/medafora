@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { generateGeminiContent } from '@/lib/utils/geminiClient'
 
 export async function runSafetyAudit() {
   const supabase = await createClient()
@@ -10,7 +9,6 @@ export async function runSafetyAudit() {
   
   if (!user) return
 
-  // Get the user's family member IDs
   const { data: familyMembers } = await supabase
     .from('family_members')
     .select('id')
@@ -32,7 +30,6 @@ export async function runSafetyAudit() {
     process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
     process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
-  // Build a single batched prompt with ALL medicines for efficient AI analysis
   const medicineList = medicines.map((med, i) => 
     `${i + 1}. "${med.medicine_name}" | Salt: "${med.salt_composition || 'Unknown'}" | Form: "${med.dosage_form || 'Unknown'}" | Strength: "${med.strength || 'Unknown'}" | Manufacturer: "${med.brand_or_manufacturer || 'Unknown'}"`
   ).join('\n')
@@ -71,24 +68,100 @@ Be thorough and accurate. Do NOT mark medicines as banned unless they genuinely 
 Return strictly valid JSON array only.`
 
   let auditResults: any[] = []
+  let usedModel = 'none'
+  let aiErrorMsg = ''
 
+  // Direct Gemini API call with explicit model selection
   if (geminiKey) {
+    // Discover available models first
+    let modelsToTry = ['gemini-2.0-flash', 'gemini-2.5-flash']
+
     try {
-      const parsed = await generateGeminiContent([{ text: prompt }], geminiKey)
-      
-      // Handle both array and object responses
-      if (Array.isArray(parsed)) {
-        auditResults = parsed
-      } else if (parsed && typeof parsed === 'object') {
-        // Sometimes Gemini wraps in an object
-        const possibleArray = Object.values(parsed).find(v => Array.isArray(v))
-        if (possibleArray) {
-          auditResults = possibleArray as any[]
+      const listRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`,
+        { signal: AbortSignal.timeout(5000) }
+      )
+      if (listRes.ok) {
+        const listData = await listRes.json()
+        if (Array.isArray(listData.models)) {
+          const flashModels = listData.models
+            .filter((m: any) =>
+              Array.isArray(m.supportedGenerationMethods) &&
+              m.supportedGenerationMethods.includes('generateContent') &&
+              m.name.includes('flash')
+            )
+            .map((m: any) => m.name.replace(/^models\//, ''))
+          
+          if (flashModels.length > 0) {
+            modelsToTry = flashModels
+          }
+          console.log('[Safety Audit] Discovered models:', flashModels.join(', '))
         }
       }
-    } catch (aiErr: any) {
-      console.error('Gemini Safety Audit AI Error:', aiErr.message)
+    } catch (listErr) {
+      console.warn('[Safety Audit] ListModels failed, using defaults:', listErr)
     }
+
+    // Try each model until one succeeds
+    for (const model of modelsToTry) {
+      try {
+        console.log(`[Safety Audit] Trying model: ${model}`)
+
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: {
+                response_mime_type: 'application/json',
+                temperature: 0.1,
+              },
+            }),
+            signal: AbortSignal.timeout(30000),
+          }
+        )
+
+        if (!res.ok) {
+          const errBody = await res.text()
+          console.warn(`[Safety Audit] Model ${model} returned ${res.status}: ${errBody.slice(0, 200)}`)
+          aiErrorMsg = `${model}: HTTP ${res.status}`
+          continue
+        }
+
+        const data = await res.json()
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+        if (!text) {
+          console.warn(`[Safety Audit] Model ${model} returned empty candidates`)
+          aiErrorMsg = `${model}: empty response`
+          continue
+        }
+
+        const parsed = JSON.parse(text)
+        usedModel = model
+
+        if (Array.isArray(parsed)) {
+          auditResults = parsed
+        } else if (parsed && typeof parsed === 'object') {
+          const possibleArray = Object.values(parsed).find(v => Array.isArray(v))
+          if (possibleArray) {
+            auditResults = possibleArray as any[]
+          }
+        }
+
+        console.log(`[Safety Audit] SUCCESS with model ${model}, got ${auditResults.length} results`)
+        break // Success, stop trying more models
+
+      } catch (modelErr: any) {
+        console.error(`[Safety Audit] Model ${model} exception:`, modelErr.message)
+        aiErrorMsg = `${model}: ${modelErr.message}`
+      }
+    }
+  } else {
+    aiErrorMsg = 'GEMINI_API_KEY not found in environment variables'
+    console.error('[Safety Audit]', aiErrorMsg)
   }
 
   // Build audit log entries
@@ -101,30 +174,29 @@ Return strictly valid JSON array only.`
         checked_at: new Date().toISOString(),
         result_status: aiResult.result_status || 'CLEARED',
         summary: aiResult.summary || 'AI analysis completed. No specific regulatory issues identified.',
-        source_reference: aiResult.source_reference || 'AI Regulatory Knowledge Base',
+        source_reference: `[Model: ${usedModel}] ${aiResult.source_reference || 'AI Regulatory Knowledge Base'}`,
       }
     }
 
-    // Fallback: if AI was unavailable, use existing DB data
+    // Fallback: AI was unavailable
     return {
       medicine_id: med.id,
       checked_at: new Date().toISOString(),
       result_status: med.is_banned ? 'BANNED' : 'CLEARED',
       summary: med.is_banned 
         ? (med.ban_notice_details || 'Previously flagged as prohibited by regulatory order.') 
-        : 'AI audit unavailable. No existing ban records found in database.',
-      source_reference: med.is_banned ? 'CDSCO / FDA Database Records' : 'Database Fallback Check',
+        : `AI audit failed (${aiErrorMsg || 'unknown error'}). Falling back to existing database records. No ban found.`,
+      source_reference: `[AI UNAVAILABLE: ${aiErrorMsg}] Database Fallback`,
     }
   })
 
-  // Insert audit log entries
   const { error: insertError } = await supabase.from('safety_audit_logs').insert(auditLogs)
   if (insertError) {
-    console.error("Failed to insert audit logs", insertError)
+    console.error('[Safety Audit] Failed to insert audit logs:', insertError)
     throw new Error(insertError.message)
   }
 
-  // Update medicines with AI findings: mark banned ones, clear safe ones
+  // Update medicines with AI findings
   for (let i = 0; i < medicines.length; i++) {
     const aiResult = auditResults[i]
     if (aiResult) {
@@ -138,7 +210,6 @@ Return strictly valid JSON array only.`
         })
         .eq('id', medicines[i].id)
     } else {
-      // Just update the timestamp
       await supabase
         .from('medicines')
         .update({ last_safety_check: new Date().toISOString() })
