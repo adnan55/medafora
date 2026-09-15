@@ -315,10 +315,10 @@ export function FamilyMemberHealthHub({
             let statusColor = 'text-emerald-700 bg-emerald-100 border-emerald-200';
             let dotColor = 'bg-emerald-600';
 
-            if (status.label === 'Expired' || status.label === '< 15 Days') {
+            if (status.urgency === 'EXPIRED' || status.urgency === 'CRITICAL') {
               statusColor = 'text-rose-700 bg-rose-100 border-rose-200';
               dotColor = 'bg-rose-600';
-            } else if (status.label === '< 45 Days') {
+            } else if (status.urgency === 'WARNING') {
               statusColor = 'text-amber-700 bg-amber-100 border-amber-200';
               dotColor = 'bg-amber-600';
             }

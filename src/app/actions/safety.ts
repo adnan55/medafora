@@ -8,11 +8,20 @@ export async function runSafetyAudit() {
   const { data: { user } } = await supabase.auth.getUser()
   
   if (!user) return
+
+  // Get the user's family member IDs first (medicines links via family_member_id, not user_id)
+  const { data: familyMembers } = await supabase
+    .from('family_members')
+    .select('id')
+    .eq('user_id', user.id)
+
+  const familyMemberIds = familyMembers?.map(fm => fm.id) || []
+  if (familyMemberIds.length === 0) return
   
   const { data: medicines } = await supabase
     .from('medicines')
     .select('id, is_banned, ban_notice_details')
-    .eq('user_id', user.id)
+    .in('family_member_id', familyMemberIds)
 
   if (medicines && medicines.length > 0) {
     const auditLogs = medicines.map(med => ({
@@ -32,7 +41,7 @@ export async function runSafetyAudit() {
     const { error: updateError } = await supabase
       .from('medicines')
       .update({ last_safety_check: new Date().toISOString() })
-      .eq('user_id', user.id)
+      .in('family_member_id', familyMemberIds)
 
     if (updateError) {
       console.error("Failed to update last_safety_check", updateError)

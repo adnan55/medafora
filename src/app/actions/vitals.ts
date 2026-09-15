@@ -19,11 +19,15 @@ export async function createVitalLog(payload: {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    throw new Error('Unauthorized')
+    return { success: false, error: 'Unauthorized' }
   }
 
   // Determine clinical status if not explicitly passed
   let status = payload.status || 'NORMAL'
+  const numericValue = Number(payload.value)
+  if (isNaN(numericValue)) {
+    return { success: false, error: 'Invalid vital value: must be a valid number' }
+  }
   if (payload.vital_type === 'BLOOD_GLUCOSE') {
     const val = Number(payload.value)
     if (payload.context?.includes('Fasting')) {
@@ -95,7 +99,7 @@ export async function deleteVitalLog(id: string, familyMemberId: string) {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    throw new Error('Unauthorized')
+    return { success: false, error: 'Unauthorized' }
   }
 
   const { error } = await supabase

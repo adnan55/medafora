@@ -174,7 +174,7 @@ Return a JSON object:
                   underlying_reason_or_mechanism: mem.underlying_reason_or_mechanism,
                   recommended_actions: mem.recommended_actions,
                 },
-              ])
+              ]).throwOnError()
             } catch (saveErr) {
               console.warn('Auto-memory save error:', saveErr)
             }

@@ -22,7 +22,7 @@ export async function createMedicalRecord(payload: {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    throw new Error('Unauthorized')
+    return { success: false, error: 'Unauthorized' }
   }
 
   const { data, error } = await supabase
@@ -80,7 +80,7 @@ export async function updateMedicalRecord(
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    throw new Error('Unauthorized')
+    return { success: false, error: 'Unauthorized' }
   }
 
   const { data, error } = await supabase
@@ -119,7 +119,7 @@ export async function deleteMedicalRecord(id: string, familyMemberId: string) {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) {
-    throw new Error('Unauthorized')
+    return { success: false, error: 'Unauthorized' }
   }
 
   const { error } = await supabase

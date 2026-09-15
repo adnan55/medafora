@@ -591,7 +591,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
               </div>
               <div>
                 <div className="text-3xl font-black text-rose-700 tracking-tight">
-                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).label === 'Expired').length}
+                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).urgency === 'EXPIRED').length}
                 </div>
                 <div className="text-[11px] font-bold text-rose-700/80 mt-0.5">Danger: Dispose safely</div>
               </div>
@@ -606,7 +606,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
               </div>
               <div>
                 <div className="text-3xl font-black text-amber-700 tracking-tight">
-                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).label === '< 15 Days').length}
+                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).urgency === 'CRITICAL').length}
                 </div>
                 <div className="text-[11px] font-bold text-amber-700/80 mt-0.5">Critical: Renew now</div>
               </div>
@@ -621,7 +621,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
               </div>
               <div>
                 <div className="text-3xl font-black text-[#2F4858] tracking-tight">
-                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).label === '< 45 Days').length}
+                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).urgency === 'WARNING').length}
                 </div>
                 <div className="text-[11px] font-bold text-[#2F4858]/70 mt-0.5">Warning: Plan ahead</div>
               </div>
@@ -636,7 +636,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
               </div>
               <div>
                 <div className="text-3xl font-black text-emerald-700 tracking-tight">
-                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).label === 'Safe').length}
+                  {medicines.filter(m => calculateExpiryStatus(m.expiry_date).urgency === 'SAFE').length}
                 </div>
                 <div className="text-[11px] font-bold text-emerald-700/80 mt-0.5">Safe: Good to consume</div>
               </div>
@@ -696,11 +696,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
                 let statusColor = 'text-emerald-700 bg-emerald-100 border-emerald-200';
                 let dotColor = 'bg-emerald-600';
 
-                if (status.label === 'Expired' || status.label === '< 15 Days') {
+                if (status.urgency === 'EXPIRED' || status.urgency === 'CRITICAL') {
                   statusColor = 'text-rose-700 bg-rose-100 border-rose-200';
                   dotColor = 'bg-rose-600';
                   badgeVariant = 'destructive';
-                } else if (status.label === '< 45 Days') {
+                } else if (status.urgency === 'WARNING') {
                   statusColor = 'text-amber-700 bg-amber-100 border-amber-200';
                   dotColor = 'bg-amber-600';
                 }

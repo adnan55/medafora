@@ -13,7 +13,7 @@ export async function deleteMedicine(id: string) {
 
   if (error) {
     console.error('Failed to delete medicine', error)
-    throw new Error('Failed to delete medicine')
+    return { success: false, error: 'Failed to delete medicine' }
   }
 
   // Redirect to dashboard after successful deletion

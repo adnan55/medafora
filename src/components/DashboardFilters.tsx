@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, MapPin, Layers, ArrowUpDown } from 'lucide-react'
-import { useTransition, useState, useEffect } from 'react'
+import { useTransition, useState, useEffect, useCallback } from 'react'
 
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -14,15 +14,7 @@ export function DashboardFilters({ uniqueStorages, uniqueForms }: { uniqueStorag
   
   const [q, setQ] = useState(searchParams.get('q') || '')
 
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateFilter('q', q)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [q])
-
-  const updateFilter = (key: string, value: string) => {
+  const updateFilter = useCallback((key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString())
     if (value && value !== 'ALL') {
       params.set(key, value)
@@ -32,7 +24,15 @@ export function DashboardFilters({ uniqueStorages, uniqueForms }: { uniqueStorag
     startTransition(() => {
       router.push(`/?${params.toString()}`)
     })
-  }
+  }, [searchParams, router, startTransition])
+
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      updateFilter('q', q)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [q, updateFilter])
 
   return (
     <div className="flex flex-col md:flex-row gap-3">

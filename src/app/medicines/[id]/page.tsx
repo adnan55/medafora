@@ -48,11 +48,11 @@ export default async function MedicineDetailsPage({ params }: { params: Promise<
   const { data: familyMembers } = await supabase.from('family_members').select('*')
 
   const expiryStatus = calculateExpiryStatus(medicine.expiry_date)
-  let badgeColor = expiryStatus.label === 'Expired' ? 'text-rose-700 bg-rose-100 border-rose-200' 
-                : expiryStatus.label === '< 15 Days' ? 'text-rose-700 bg-rose-100 border-rose-200' 
-                : expiryStatus.label === '< 45 Days' ? 'text-amber-700 bg-amber-100 border-amber-200'
+  let badgeColor = expiryStatus.urgency === 'EXPIRED' ? 'text-rose-700 bg-rose-100 border-rose-200' 
+                : expiryStatus.urgency === 'CRITICAL' ? 'text-rose-700 bg-rose-100 border-rose-200' 
+                : expiryStatus.urgency === 'WARNING' ? 'text-amber-700 bg-amber-100 border-amber-200'
                 : 'text-emerald-700 bg-emerald-100 border-emerald-200';
-  let dotColor = expiryStatus.label === 'Expired' ? 'bg-rose-600' : expiryStatus.label === '< 15 Days' ? 'bg-rose-600' : expiryStatus.label === '< 45 Days' ? 'bg-amber-600' : 'bg-emerald-600';
+  let dotColor = expiryStatus.urgency === 'EXPIRED' ? 'bg-rose-600' : expiryStatus.urgency === 'CRITICAL' ? 'bg-rose-600' : expiryStatus.urgency === 'WARNING' ? 'bg-amber-600' : 'bg-emerald-600';
 
   const assignedMember = medicine.family_members
   const memberAllergies = assignedMember?.allergies || []
