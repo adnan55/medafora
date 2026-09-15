@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -58,77 +58,77 @@ export function AuditLogTable({ logs }: { logs: AuditLog[] }) {
   }
 
   return (
-    <Table>
-      <TableHeader className="bg-[#F8FDFB] text-[#2F4858]/70 uppercase text-[10px] font-extrabold border-b border-[#2F4858]/15">
-        <TableRow>
-          <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Medicine & Salt</TableHead>
-          <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Scan Date</TableHead>
-          <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Verdict</TableHead>
-          <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Regulatory Findings & Notice</TableHead>
-          <TableHead className="px-4 py-3 text-right font-extrabold text-[#2F4858]">Action</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody className="divide-y divide-[#2F4858]/10 text-xs">
-        {logs.map((log) => {
-          const isExpanded = expandedId === log.id
-          return (
-            <> 
-              <TableRow
-                key={log.id}
-                className="hover:bg-[#DDFBEF]/20 transition-colors cursor-pointer"
-                onClick={() => toggleExpand(log.id)}
-              >
-                <TableCell className="px-4 py-3 font-semibold text-[#2F4858]">
-                  <p className="font-extrabold">{log.medicines?.medicine_name}</p>
-                  <p className="text-[11px] text-[#2F4858]/80 font-medium truncate max-w-[200px]">
-                    {log.medicines?.salt_composition}
-                  </p>
-                </TableCell>
-                <TableCell className="px-4 py-3 text-[#2F4858]/70 whitespace-nowrap font-medium">
-                  {new Date(log.checked_at).toLocaleDateString()}
-                </TableCell>
-                <TableCell className="px-4 py-3 whitespace-nowrap">
-                  {log.result_status === 'BANNED' ? (
-                    <Badge variant="destructive" className="font-black text-[10px] uppercase px-2 py-0.5 rounded-full">
-                      BANNED
-                    </Badge>
-                  ) : log.result_status === 'WARNING' ? (
-                    <Badge variant="outline" className="font-bold text-[10px] bg-amber-100 text-amber-800 border-amber-200 px-2 py-0.5 rounded-full">
-                      WARNING
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline" className="font-bold text-[10px] bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8] px-2 py-0.5 rounded-full">
-                      CLEARED
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="px-4 py-3 text-[#2F4858]/90 max-w-md">
-                  <p className={isExpanded ? '' : 'line-clamp-2'}>{log.summary}</p>
-                </TableCell>
-                <TableCell className="px-4 py-3 text-right whitespace-nowrap">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs font-bold text-[#2F4858] hover:bg-[#DDFBEF] rounded-lg"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      toggleExpand(log.id)
-                    }}
-                  >
-                    {isExpanded ? (
-                      <>
-                        <ChevronUp className="w-3.5 h-3.5 mr-1" />
-                        Collapse
-                      </>
+    <div className="overflow-x-auto w-full">
+      <Table className="min-w-full">
+        <TableHeader className="bg-[#F8FDFB] text-[#2F4858]/70 uppercase text-[10px] font-extrabold border-b border-[#2F4858]/15">
+          <TableRow>
+            <TableHead className="px-3 sm:px-4 py-3 font-extrabold text-[#2F4858]">Medicine</TableHead>
+            <TableHead className="hidden md:table-cell px-4 py-3 font-extrabold text-[#2F4858]">Scan Date</TableHead>
+            <TableHead className="px-2 sm:px-4 py-3 font-extrabold text-[#2F4858]">Verdict</TableHead>
+            <TableHead className="hidden sm:table-cell px-4 py-3 font-extrabold text-[#2F4858]">Notice</TableHead>
+            <TableHead className="px-2 sm:px-4 py-3 text-right font-extrabold text-[#2F4858]"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody className="divide-y divide-[#2F4858]/10 text-xs">
+          {logs.map((log) => {
+            const isExpanded = expandedId === log.id
+            return (
+              <React.Fragment key={log.id}> 
+                <TableRow
+                  className="hover:bg-[#DDFBEF]/20 transition-colors cursor-pointer"
+                  onClick={() => toggleExpand(log.id)}
+                >
+                  <TableCell className="px-3 sm:px-4 py-3 font-semibold text-[#2F4858] max-w-[120px] sm:max-w-none">
+                    <p className="font-extrabold truncate">{log.medicines?.medicine_name}</p>
+                    <p className="text-[10px] sm:text-[11px] text-[#2F4858]/80 font-medium truncate">
+                      {log.medicines?.salt_composition}
+                    </p>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell px-4 py-3 text-[#2F4858]/70 whitespace-nowrap font-medium">
+                    {new Date(log.checked_at).toLocaleDateString()}
+                  </TableCell>
+                  <TableCell className="px-2 sm:px-4 py-3 whitespace-nowrap">
+                    {log.result_status === 'BANNED' ? (
+                      <Badge variant="destructive" className="font-black text-[9px] sm:text-[10px] uppercase px-1.5 sm:px-2 py-0.5 rounded-full">
+                        BANNED
+                      </Badge>
+                    ) : log.result_status === 'WARNING' ? (
+                      <Badge variant="outline" className="font-bold text-[9px] sm:text-[10px] bg-amber-100 text-amber-800 border-amber-200 px-1.5 sm:px-2 py-0.5 rounded-full">
+                        WARNING
+                      </Badge>
                     ) : (
-                      <>
-                        <ChevronDown className="w-3.5 h-3.5 mr-1" />
-                        Details
-                      </>
+                      <Badge variant="outline" className="font-bold text-[9px] sm:text-[10px] bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8] px-1.5 sm:px-2 py-0.5 rounded-full">
+                        CLEARED
+                      </Badge>
                     )}
-                  </Button>
-                </TableCell>
-              </TableRow>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell px-4 py-3 text-[#2F4858]/90 max-w-[200px]">
+                    <p className={isExpanded ? '' : 'line-clamp-2'}>{log.summary}</p>
+                  </TableCell>
+                  <TableCell className="px-2 sm:px-4 py-3 text-right whitespace-nowrap">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 sm:px-3 text-[10px] sm:text-xs font-bold text-[#2F4858] hover:bg-[#DDFBEF] rounded-lg"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        toggleExpand(log.id)
+                      }}
+                    >
+                      {isExpanded ? (
+                        <>
+                          <ChevronUp className="w-3.5 h-3.5 sm:mr-1" />
+                          <span className="hidden sm:inline">Collapse</span>
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="w-3.5 h-3.5 sm:mr-1" />
+                          <span className="hidden sm:inline">Details</span>
+                        </>
+                      )}
+                    </Button>
+                  </TableCell>
+                </TableRow>
 
               {/* Expanded Detail Row */}
               {isExpanded && (
@@ -196,10 +196,11 @@ export function AuditLogTable({ logs }: { logs: AuditLog[] }) {
                   </TableCell>
                 </TableRow>
               )}
-            </>
+            </React.Fragment>
           )
         })}
       </TableBody>
     </Table>
+    </div>
   )
 }
