@@ -52,7 +52,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }
         `}} />
       </head>
-      <body className="min-h-full flex flex-col font-sans bg-[#F8FDFB] text-[#2F4858]">
+      <body suppressHydrationWarning className="min-h-full flex flex-col font-sans bg-[#F8FDFB] text-[#2F4858]">
         <TooltipProvider>
           {children}
         </TooltipProvider>

@@ -34,6 +34,7 @@ import { LogVitalModal } from '@/components/LogVitalModal'
 import { BiomarkerTrendChart } from '@/components/BiomarkerTrendChart'
 import { AIHealthSummaryCard } from '@/components/AIHealthSummaryCard'
 import { EditFamilyMemberModal } from '@/components/EditFamilyMemberModal'
+import { EmergencyCardModal } from '@/components/EmergencyCardModal'
 import { calculateExpiryStatus } from '@/lib/utils/expiryCalculator'
 import { calculateAge, checkAgeSpecificMedicineAlerts } from '@/lib/utils/ageCalculator'
 
@@ -494,6 +495,7 @@ export function FamilyMemberHealthHub({
                 familyMemberId={member.id}
                 familyMemberName={member.full_name}
               />
+              <EmergencyCardModal member={member} medicines={medicines} />
               <EditFamilyMemberModal member={member} />
             </div>
 

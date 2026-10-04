@@ -342,9 +342,44 @@ export function AIEnrichmentForm({
     }
   }
 
+  const [isCheckingSafety, setIsCheckingSafety] = useState(false)
+  const [interactionWarning, setInteractionWarning] = useState('')
+  const [overrideInteraction, setOverrideInteraction] = useState(false)
+
   // Form Submit Handler
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    
+    // Safety Check for Interactions (only if family member selected, salt exists, and not overridden)
+    if (familyMemberId && saltComposition && !overrideInteraction && !initialData?.id) {
+      setIsCheckingSafety(true)
+      setSaveError('')
+      try {
+        const checkRes = await fetch('/api/ai/check-interactions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            family_member_id: familyMemberId,
+            new_medicine_salt: saltComposition,
+            new_medicine_name: medicineName
+          })
+        })
+        if (checkRes.ok) {
+          const checkData = await checkRes.json()
+          if (checkData.hasInteraction && checkData.warning) {
+            setInteractionWarning(checkData.warning)
+            setIsCheckingSafety(false)
+            return // Stop save, wait for user to confirm
+          }
+        }
+      } catch (err) {
+        console.error('Interaction check failed', err)
+        // fail open, continue to save
+      } finally {
+        setIsCheckingSafety(false)
+      }
+    }
+
     setIsSaving(true)
     setSaveError('')
 
@@ -981,33 +1016,60 @@ export function AIEnrichmentForm({
           <Separator className="bg-[#2F4858]/10" />
 
           {/* Action Buttons */}
-          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => router.back()}
-              className="rounded-xl text-xs font-bold text-[#2F4858] hover:bg-[#DDFBEF]/50 h-10"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving}
-              className="h-11 px-8 rounded-xl bg-[#2F4858] hover:bg-[#1E313D] text-[#DDFBEF] text-xs font-black flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
-            >
-              {isSaving ? (
-                <>
-                  <Loader2 className="size-4 animate-spin text-[#DDFBEF]" />
-                  <span>Saving to Cabinet...</span>
-                </>
-              ) : (
-                <>
-                  <Save className="size-4" />
-                  <span>Save Medicine to Cabinet</span>
-                </>
-              )}
-            </Button>
-          </div>
+          {interactionWarning && !overrideInteraction && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-4">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-black text-rose-900">Dangerous Drug Interaction Detected</h4>
+                  <p className="text-xs text-rose-800 font-medium mt-1 leading-relaxed">{interactionWarning}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2.5">
+                <Button type="button" variant="ghost" onClick={() => setInteractionWarning('')} className="rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-100">
+                  Cancel & Go Back
+                </Button>
+                <Button type="button" onClick={() => { setOverrideInteraction(true); handleSubmit(); }} className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">
+                  Save Anyway (Ignore Warning)
+                </Button>
+              </div>
+            </div>
+          )}
+          
+          {!interactionWarning && (
+            <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => router.back()}
+                className="rounded-xl text-xs font-bold text-[#2F4858] hover:bg-[#DDFBEF]/50 h-10"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSaving || isCheckingSafety}
+                className="h-11 px-8 rounded-xl bg-[#2F4858] hover:bg-[#1E313D] text-[#DDFBEF] text-xs font-black flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin text-[#DDFBEF]" />
+                    <span>Saving to Cabinet...</span>
+                  </>
+                ) : isCheckingSafety ? (
+                  <>
+                    <Loader2 className="size-4 animate-spin text-[#DDFBEF]" />
+                    <span>Checking Safety...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="size-4" />
+                    <span>Save Medicine to Cabinet</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
         </form>
       </div>
     </Card>
