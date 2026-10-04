@@ -73,8 +73,8 @@ Provided by Medfora Health Guardian`
   const [open, setOpen] = useState(false)
 
   return (
-    <>
-      <Button onClick={() => setOpen(true)} variant="outline" size="sm" className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:text-rose-800 rounded-xl font-bold flex items-center gap-1.5 h-9 px-3">
+    <div className="inline-block">
+      <Button onClick={() => setOpen(true)} variant="outline" size="sm" className="bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:text-rose-800 rounded-xl font-bold flex items-center gap-1.5 h-9 px-3 w-full sm:w-auto">
         <ShieldPlus className="w-4 h-4" />
         <span className="hidden sm:inline">Emergency Card</span>
         <span className="sm:hidden">QR</span>
@@ -125,6 +125,6 @@ Provided by Medfora Health Guardian`
         </div>
       </DialogContent>
     </Dialog>
-  </>
+  </div>
   )
 }
