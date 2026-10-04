@@ -12,14 +12,14 @@ import { fetchMedicineCabinetTool, fetchPatientClinicalHistoryTool } from './too
 import { recordClinicalMemoryTool, recallPatientMemoriesTool, LOAD_MEMORY } from './tools/clinicalMemoryTools'
 
 /**
- * Medafora Master AI Orchestrator Agent
+ * Medfora Master AI Orchestrator Agent
  * Hierarchical root agent coordinating all clinical intelligence, vision, safety, and Supabase memory services.
  */
 export const rootAgent = new Agent({
-  name: 'MedaforaOrchestratorAgent',
-  description: 'Master clinical intelligence orchestrator for Medafora Family Medicine & Health Guardian with continuous Supabase patient memory.',
+  name: 'MedforaOrchestratorAgent',
+  description: 'Master clinical intelligence orchestrator for Medfora Family Medicine & Health Guardian with continuous Supabase patient memory.',
   model: 'gemini-3.7-flash',
-  instruction: `You are the Master Clinical Intelligence Orchestrator for Medafora (Family Medicine, Safety & AI Health Guardian).
+  instruction: `You are the Master Clinical Intelligence Orchestrator for Medfora (Family Medicine, Safety & AI Health Guardian).
 You coordinate specialized AI sub-agents with continuous patient memory stored in Supabase:
 
 1. 🧠 Longitudinal Patient Memory & Continuity of Care:
@@ -61,7 +61,7 @@ Always prioritize patient safety, explain complex pharmaceutical terms in access
 })
 
 export const app = new App({
-  name: 'MedaforaApp',
+  name: 'MedforaApp',
   rootAgent: rootAgent,
 })
 

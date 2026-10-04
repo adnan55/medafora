@@ -41,7 +41,7 @@ export function Navbar({ familyMembers = [], medicines = [] }: { familyMembers: 
           <Link href="/" className="flex items-center gap-2.5">
             <Image
               src="/logo.png"
-              alt="Medafora Logo"
+              alt="Medfora Logo"
               width={40}
               height={40}
               className="size-10 object-contain"
@@ -49,7 +49,7 @@ export function Navbar({ familyMembers = [], medicines = [] }: { familyMembers: 
             />
             <div>
               <span className="font-extrabold text-lg text-[#2F4858] tracking-tight leading-tight block">
-                Medafora
+                Medfora
               </span>
               <p className="text-[11px] font-medium text-[#2F4858]/70 hidden sm:block">
                 Family Medicine & Safety Guardian

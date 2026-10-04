@@ -23,14 +23,14 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           <div className="mx-auto size-16 mb-2 flex items-center justify-center">
             <Image
               src="/logo.png"
-              alt="Medafora Logo"
+              alt="Medfora Logo"
               width={64}
               height={64}
               className="size-16 object-contain"
               priority
             />
           </div>
-          <CardTitle className="text-2xl font-black text-[#2F4858] tracking-tight">Sign in to Medafora</CardTitle>
+          <CardTitle className="text-2xl font-black text-[#2F4858] tracking-tight">Sign in to Medfora</CardTitle>
           <CardDescription className="text-xs font-semibold text-[#2F4858]/70">
             Family Medicine, Safety & Health Hub Guardian
           </CardDescription>

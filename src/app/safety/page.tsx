@@ -70,7 +70,7 @@ export default async function SafetyAuditLogPage({
               Regulatory Safety & Ban Scanner
             </h2>
             <p className="text-xs text-[#2F4858]/70 font-semibold max-w-2xl">
-              Medafora continuously cross-references your medicine cabinet against CDSCO, FDA, and global regulatory gazette notices to detect prohibited or irrational drug combinations.
+              Medfora continuously cross-references your medicine cabinet against CDSCO, FDA, and global regulatory gazette notices to detect prohibited or irrational drug combinations.
             </p>
           </div>
           <DeepAuditScanButton runAuditAction={runSafetyAudit} />
@@ -151,7 +151,7 @@ export default async function SafetyAuditLogPage({
           </CardHeader>
           <CardContent>
             <p className="text-xs text-[#2F4858]/80 leading-relaxed font-medium">
-              Regulatory bodies (such as CDSCO Section 26A and US FDA) periodically prohibit irrational drug cocktails that combine active salts without synergistic clinical benefit, or where one drug masks the symptoms of toxicity caused by another. Medafora continuously tracks these gazette notices to safeguard your family.
+              Regulatory bodies (such as CDSCO Section 26A and US FDA) periodically prohibit irrational drug cocktails that combine active salts without synergistic clinical benefit, or where one drug masks the symptoms of toxicity caused by another. Medfora continuously tracks these gazette notices to safeguard your family.
             </p>
           </CardContent>
         </Card>

@@ -17,13 +17,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Medafora - Family Medicine & Health Guardian",
+  title: "Medfora - Family Medicine & Health Guardian",
   description: "Family Medicine, Safety & AI Health Hub Guardian",
-  applicationName: "Medafora",
+  applicationName: "Medfora",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Medafora",
+    title: "Medfora",
   },
   icons: {
     icon: [

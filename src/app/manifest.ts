@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Medafora - Family Medicine & Health Guardian',
-    short_name: 'Medafora',
+    name: 'Medfora - Family Medicine & Health Guardian',
+    short_name: 'Medfora',
     description: 'Family Medicine, Safety & AI Health Hub Guardian',
     start_url: '/',
     display: 'standalone',

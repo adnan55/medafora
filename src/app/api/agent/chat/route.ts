@@ -101,7 +101,7 @@ export async function POST(req: Request) {
       process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
       process.env.NEXT_PUBLIC_GEMINI_API_KEY
 
-    const systemPrompt = `You are the Medafora Clinical AI Multi-Agent Intelligence System (incorporating MedicineVisionAgent, DiagnosticReportAgent, FamilyHealthGuardianAgent, and RegulatorySafetyAgent).
+    const systemPrompt = `You are the Medfora Clinical AI Multi-Agent Intelligence System (incorporating MedicineVisionAgent, DiagnosticReportAgent, FamilyHealthGuardianAgent, and RegulatorySafetyAgent).
 
 PATIENT CLINICAL CONTEXT:
 - Name: ${patientName || memberDetails?.full_name || 'Family Member'}
