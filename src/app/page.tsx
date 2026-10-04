@@ -8,6 +8,7 @@ import { MedicineDetailsDrawer } from '@/components/MedicineDetailsDrawer'
 import { AddMedicalRecordModal } from '@/components/AddMedicalRecordModal'
 import { MedicalRecordDetailModal } from '@/components/MedicalRecordDetailModal'
 import { LogVitalModal } from '@/components/LogVitalModal'
+import { EmergencyCardModal } from '@/components/EmergencyCardModal'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -646,11 +647,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ m
 
         {/* Dashboard Search & Multi-Filters */}
         <Card className="rounded-2xl border-[#2F4858]/15 bg-white shadow-sm">
-          <CardContent className="p-4">
-            <DashboardFilters 
-              uniqueStorages={Array.from(new Set(medicines.map(m => m.storage_location).filter(Boolean))) as string[]}
-              uniqueForms={Array.from(new Set(medicines.map(m => m.dosage_form).filter(Boolean))) as string[]}
-            />
+          <CardContent className="p-4 flex flex-col md:flex-row items-center gap-3">
+            <div className="flex-1 w-full">
+              <DashboardFilters 
+                uniqueStorages={Array.from(new Set(medicines.map(m => m.storage_location).filter(Boolean))) as string[]}
+                uniqueForms={Array.from(new Set(medicines.map(m => m.dosage_form).filter(Boolean))) as string[]}
+              />
+            </div>
+            {currentMemberObj && (
+              <div className="shrink-0 w-full md:w-auto">
+                <EmergencyCardModal member={currentMemberObj} medicines={medicines.filter(m => m.family_member_id === currentMemberObj.id)} />
+              </div>
+            )}
           </CardContent>
         </Card>
 
