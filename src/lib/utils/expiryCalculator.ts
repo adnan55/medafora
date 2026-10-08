@@ -1,4 +1,4 @@
-export type ExpiryUrgency = "EXPIRED" | "CRITICAL" | "WARNING" | "SAFE";
+export type ExpiryUrgency = "EXPIRED" | "CRITICAL" | "WARNING" | "SAFE" | "UNKNOWN";
 
 export interface ExpiryStatus {
   urgency: ExpiryUrgency;
@@ -11,10 +11,12 @@ export function calculateExpiryStatus(expiryDateStr: string): ExpiryStatus {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const expiry = new Date(expiryDateStr);
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/.exec(expiryDateStr || '');
+  const expiry = match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : new Date(NaN);
+  if (match && (expiry.getFullYear() !== Number(match[1]) || expiry.getMonth() !== Number(match[2]) - 1 || expiry.getDate() !== Number(match[3]))) expiry.setTime(NaN);
   if (isNaN(expiry.getTime())) {
     return {
-      urgency: "SAFE",
+      urgency: "UNKNOWN",
       daysRemaining: 0,
       label: "Unknown Expiry",
       badgeColor: "bg-gray-100 text-gray-800 border-gray-300",
@@ -23,7 +25,7 @@ export function calculateExpiryStatus(expiryDateStr: string): ExpiryStatus {
   expiry.setHours(0, 0, 0, 0);
 
   const diffTime = expiry.getTime() - today.getTime();
-  const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const daysRemaining = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
   if (daysRemaining < 0) {
     return {

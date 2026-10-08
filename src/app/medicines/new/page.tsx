@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { AIEnrichmentForm } from '@/components/AIEnrichmentForm'
-import { Navbar } from '@/components/Navbar'
+import { CabinetNav } from '@/components/CabinetNav'
+import { DataUnavailable } from '@/components/DataUnavailable'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function NewMedicinePage() {
@@ -14,30 +15,33 @@ export default async function NewMedicinePage() {
   }
 
   // Fetch family members for the dropdown
-  const { data: familyMembers } = await supabase
+  const { data: familyMembers, error } = await supabase
     .from('family_members')
-    .select('id, full_name, relationship')
+    .select('id, full_name, relationship, date_of_birth, allergies')
+    .eq('user_id', user.id)
 
+  if (error) return <><CabinetNav /><main id="main-content" tabIndex={-1} className="page-shell"><h1 className="text-2xl font-bold">Add medicine</h1><DataUnavailable /></main></>
   if (!familyMembers || familyMembers.length === 0) {
     return (
-      <div className="min-h-screen bg-[#F8FDFB] text-[#2F4858] p-8 flex items-center justify-center">
+      <><CabinetNav /><main id="main-content" tabIndex={-1} className="min-h-screen bg-[#F8FDFB] text-[#2F4858] p-8 flex items-center justify-center">
         <div className="bg-white p-8 rounded-2xl shadow-sm border border-[#2F4858]/20 max-w-md text-center space-y-4">
-          <h2 className="text-xl font-extrabold text-[#2F4858]">No Family Members Found</h2>
-          <p className="text-[#2F4858]/70 text-sm font-medium">You must add a family member before you can add medicines to their cabinet.</p>
+          <h1 className="text-xl font-extrabold text-[#2F4858]">Add a family profile first</h1>
+          <p className="text-muted-foreground text-sm font-medium">You must add a family member before you can add medicines to their cabinet.</p>
           <Link href="/family" className="inline-block px-5 py-2.5 bg-[#2F4858] text-[#DDFBEF] rounded-xl hover:bg-[#1E313D] text-xs font-bold shadow-sm transition-all">
             Go to Family Profiles
           </Link>
         </div>
-      </div>
+      </main></>
     )
   }
 
   return (
     <div className="min-h-screen bg-[#F8FDFB] text-[#2F4858] pb-12">
-      <Navbar familyMembers={familyMembers} medicines={[]} />
+      <CabinetNav />
       
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
-        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-extrabold text-[#2F4858]/70 hover:text-[#2F4858] transition-colors">
+      <main id="main-content" tabIndex={-1} className="max-w-3xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        <h1 className="text-2xl font-bold">Add medicine</h1>
+        <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-extrabold text-muted-foreground hover:text-[#2F4858] transition-colors">
           <ArrowLeft className="w-4 h-4" />
           <span>Back to Dashboard</span>
         </Link>

@@ -1,13 +1,17 @@
+import { authenticatedAI, readJSON, RequestError, errorResponse } from '@/lib/server/requestGuard'
+import { reportSchema, reportOutput } from '@/lib/validation/requests'
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { generateGeminiContent } from '@/lib/utils/geminiClient'
+import { generateGeminiContent, type GeminiPart } from '@/lib/utils/geminiClient'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
+    const { supabase } = await authenticatedAI()
+    const parsedBody = reportSchema.safeParse(await readJSON(req))
+    if (!parsedBody.success) throw new RequestError('Invalid document, images or notes')
+    const body = parsedBody.data
     const { fileBase64, mimeType, notes, patientName } = body
 
     if (!fileBase64 && !notes) {
@@ -20,15 +24,14 @@ export async function POST(req: Request) {
     const geminiKey =
       process.env.GEMINI_API_KEY ||
       process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY
 
     let lastError = ''
 
     // 1. Direct Gemini Call with Dynamic Model Discovery
     if (geminiKey) {
       try {
-        const parts: any[] = [
+        const parts: GeminiPart[] = [
           {
             text: `You are an expert diagnostic clinical pathology and medical report AI assistant.
 Patient context: ${patientName || 'Family Member'}.
@@ -71,11 +74,11 @@ Return strictly valid JSON conforming to the schema.`,
         }
 
         const parsedResult = await generateGeminiContent(parts, geminiKey)
-        if (parsedResult) {
+        if (reportOutput.safeParse(parsedResult).success) {
           return NextResponse.json({ success: true, data: parsedResult })
         }
-      } catch (geminiErr: any) {
-        lastError = geminiErr.message
+      } catch (geminiErr) {
+        lastError = geminiErr instanceof Error ? geminiErr.message : "Report extraction unavailable"
         console.warn('Direct Gemini Vision Report Analysis Warning:', geminiErr)
       }
     } else if (!geminiKey) {
@@ -84,7 +87,6 @@ Return strictly valid JSON conforming to the schema.`,
 
     // 2. Try Supabase Edge Function fallback
     try {
-      const supabase = await createClient()
       const { data, error } = await supabase.functions.invoke('analyze-medical-report', {
         body: {
           fileBase64: fileBase64 ? String(fileBase64).replace(/^data:[^;]+;base64,/, '') : '',
@@ -94,7 +96,7 @@ Return strictly valid JSON conforming to the schema.`,
         },
       })
 
-      if (!error && data && data.success !== false) {
+      if (!error && data && data.success !== false && reportOutput.safeParse(data.data || data).success) {
         return NextResponse.json({ success: true, data: data.data || data })
       }
     } catch (edgeErr) {
@@ -108,8 +110,9 @@ Return strictly valid JSON conforming to the schema.`,
       },
       { status: 500 }
     )
-  } catch (error: any) {
+  } catch (error) {
     console.error('Analyze Report Route Error:', error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    const failure = errorResponse(error)
+    return NextResponse.json({ success: false, error: failure.message }, { status: failure.status })
   }
 }

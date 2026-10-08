@@ -10,8 +10,8 @@ export const parseMedicinePackagingTool = new FunctionTool({
   parameters: z.object({
     raw_ocr_text: z.string().describe('Extracted text or description from the medicine photos'),
     photo_count: z.number().optional().describe('Number of photos analyzed'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { raw_ocr_text: string; photo_count?: number }) => {
     const { raw_ocr_text = '', photo_count = 1 } = input || {}
     const text = String(raw_ocr_text).toLowerCase()
 
@@ -58,8 +58,8 @@ export const checkDrugSaltIndicationsTool = new FunctionTool({
   description: 'Looks up indications, primary therapeutic uses, standard administration, and storage specifications for an active salt.',
   parameters: z.object({
     salt_name: z.string().describe('Active pharmaceutical ingredient (e.g. Paracetamol, Amoxicillin, Pantoprazole)'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { salt_name: string }) => {
     const { salt_name = '' } = input || {}
     const s = String(salt_name).toLowerCase()
 

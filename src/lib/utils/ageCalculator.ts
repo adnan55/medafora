@@ -13,29 +13,25 @@ export interface AgeInfo {
 export function calculateAge(dobString?: string | null): AgeInfo | null {
   if (!dobString) return null
 
-  const birthDate = new Date(dobString)
-  if (isNaN(birthDate.getTime())) return null
-
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/.exec(dobString)
+  if (!match) return null
+  const birthDate = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  if (birthDate.getFullYear() !== Number(match[1]) || birthDate.getMonth() !== Number(match[2]) - 1 || birthDate.getDate() !== Number(match[3])) return null
   const today = new Date()
-  
-  let years = today.getFullYear() - birthDate.getFullYear()
-  let months = today.getMonth() - birthDate.getMonth()
-  let days = today.getDate() - birthDate.getDate()
-
-  if (days < 0) {
-    months -= 1
-    const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0)
-    days += prevMonth.getDate()
+  today.setHours(0, 0, 0, 0)
+  if (birthDate > today) return null
+  const anniversary = (monthCount: number) => {
+    const start = new Date(birthDate.getFullYear(), birthDate.getMonth() + monthCount, 1)
+    const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+    start.setDate(Math.min(birthDate.getDate(), lastDay))
+    return start
   }
-
-  if (months < 0) {
-    years -= 1
-    months += 12
-  }
-
-  if (years < 0) {
-    return null // Future date
-  }
+  let totalMonths = (today.getFullYear() - birthDate.getFullYear()) * 12 + today.getMonth() - birthDate.getMonth()
+  if (anniversary(totalMonths) > today) totalMonths--
+  const years = Math.floor(totalMonths / 12)
+  const months = totalMonths % 12
+  const anchor = anniversary(totalMonths)
+  const days = Math.round((Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) - Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())) / 86400000)
 
   let formatted = ''
   let lifeStage: AgeInfo['lifeStage'] = 'ADULT'

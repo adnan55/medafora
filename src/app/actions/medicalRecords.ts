@@ -2,6 +2,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { medicalRecordSchema } from '@/lib/validation/requests'
+import type { BiomarkerRecord } from '@/lib/types/records'
+import { ownedMember } from '@/lib/server/requestGuard'
 
 export async function createMedicalRecord(payload: {
   family_member_id: string
@@ -12,8 +15,8 @@ export async function createMedicalRecord(payload: {
   doctor_name?: string
   hospital_clinic?: string
   summary?: string
-  biomarkers?: any[]
-  ai_analysis?: any
+  biomarkers?: BiomarkerRecord[]
+  ai_analysis?: Record<string, unknown>
   file_url?: string
   file_name?: string
   file_type?: string
@@ -24,6 +27,12 @@ export async function createMedicalRecord(payload: {
   if (!user) {
     return { success: false, error: 'Unauthorized' }
   }
+
+  const parsed = medicalRecordSchema.safeParse(payload)
+  if (!parsed.success || JSON.stringify(payload).length > 128000) return { success: false, error: 'Invalid report fields' }
+  if (payload.file_url && (!payload.file_url.startsWith(`${user.id}/${payload.family_member_id}/`) || payload.file_url.includes('..'))) return { success: false, error: 'Invalid report attachment owner' }
+  try { await ownedMember(supabase, user.id, payload.family_member_id) }
+  catch { return { success: false, error: 'Family member unavailable' } }
 
   const { data, error } = await supabase
     .from('medical_records')
@@ -69,8 +78,8 @@ export async function updateMedicalRecord(
     doctor_name?: string
     hospital_clinic?: string
     summary?: string
-    biomarkers?: any[]
-    ai_analysis?: any
+    biomarkers?: BiomarkerRecord[]
+    ai_analysis?: Record<string, unknown>
     file_url?: string
     file_name?: string
     file_type?: string
@@ -82,6 +91,14 @@ export async function updateMedicalRecord(
   if (!user) {
     return { success: false, error: 'Unauthorized' }
   }
+
+  const { data: existing, error: existingError } = await supabase.from('medical_records').select('family_member_id, file_url').eq('id', id).eq('user_id', user.id).maybeSingle()
+  if (existingError || !existing || existing.family_member_id !== payload.family_member_id) return { success: false, error: 'Report not found' }
+  if (payload.file_url && payload.file_url !== existing.file_url && (!payload.file_url.startsWith(`${user.id}/${payload.family_member_id}/`) || payload.file_url.includes('..'))) return { success: false, error: 'Invalid report attachment owner' }
+  const parsed = medicalRecordSchema.safeParse(payload)
+  if (!parsed.success || JSON.stringify(payload).length > 128000) return { success: false, error: 'Invalid report fields' }
+  try { await ownedMember(supabase, user.id, payload.family_member_id) }
+  catch { return { success: false, error: 'Family member unavailable' } }
 
   const { data, error } = await supabase
     .from('medical_records')
@@ -122,18 +139,16 @@ export async function deleteMedicalRecord(id: string, familyMemberId: string) {
     return { success: false, error: 'Unauthorized' }
   }
 
-  const { error } = await supabase
-    .from('medical_records')
-    .delete()
-    .eq('id', id)
-    .eq('user_id', user.id)
-
-  if (error) {
-    console.error('Error deleting medical record:', error)
-    return { success: false, error: error.message }
+  const { data, error } = await supabase.from('medical_records').delete().eq('id', id).eq('user_id', user.id).eq('family_member_id', familyMemberId).select('file_url')
+  if (error || data?.length !== 1) return { success: false, error: 'Report not found or could not be deleted' }
+  let cleanupPending = false
+  const path = data[0].file_url
+  if (typeof path === 'string' && path.startsWith(user.id + '/') && !path.includes('..')) {
+    const result = await supabase.storage.from('medical_reports').remove([path])
+    cleanupPending = !!result.error
   }
 
   revalidatePath(`/family/${familyMemberId}`)
   revalidatePath('/family')
-  return { success: true }
+  return { success: true, cleanupPending }
 }

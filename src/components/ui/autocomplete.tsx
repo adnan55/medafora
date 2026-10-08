@@ -7,6 +7,8 @@ import React, {
   useRef,
   useCallback,
   useEffect,
+  useSyncExternalStore,
+  useId,
   type ReactNode
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -23,6 +25,7 @@ interface ItemMeta {
 }
 
 interface AutocompleteCtx {
+  listId: string
   open: boolean
   setOpen: (v: boolean) => void
   inputValue: string
@@ -81,6 +84,7 @@ const Autocomplete = ({
   onOpenChange,
   disabled = false
 }: AutocompleteProps) => {
+  const listId = useId()
   const [openState, setOpenState] = useState(defaultOpen)
   const [inputValue, setInputValueState] = useState(defaultInputValue)
   const [selectedValue, setSelectedValue] = useState<string | null>(defaultValue ?? null)
@@ -176,6 +180,7 @@ const Autocomplete = ({
   return (
     <AutocompleteCtx.Provider
       value={{
+        listId,
         open: isOpen,
         setOpen,
         inputValue,
@@ -250,7 +255,7 @@ const AutocompleteInput = ({
   onKeyDown,
   ...props
 }: AutocompleteInputProps) => {
-  const { open, setOpen, inputValue, setInputValue, inputWrapperRef, inputRef, disabled, highlightNext, highlightPrev, selectHighlighted } =
+  const { listId, highlightedValue, open, setOpen, inputValue, setInputValue, inputWrapperRef, inputRef, disabled, highlightNext, highlightPrev, selectHighlighted } =
     useAc()
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -287,6 +292,8 @@ const AutocompleteInput = ({
         data-slot='autocomplete-input'
         data-size={size}
         role='combobox'
+        aria-controls={listId}
+        aria-activedescendant={open && highlightedValue ? listId + '-' + encodeURIComponent(highlightedValue) : undefined}
         aria-expanded={open}
         aria-autocomplete='list'
         aria-haspopup='listbox'
@@ -328,9 +335,11 @@ interface AutocompletePortalProps {
   container?: HTMLElement | null
 }
 
+const subscribeToHydration = () => () => {}
+const clientHydrated = () => true
+const serverHydrated = () => false
 const AutocompletePortal = ({ children, container }: AutocompletePortalProps) => {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => setMounted(true), [])
+  const mounted = useSyncExternalStore(subscribeToHydration, clientHydrated, serverHydrated)
   if (!mounted) return null
   return createPortal(children, container ?? document.body)
 }
@@ -372,7 +381,9 @@ const AutocompletePositioner = ({
   const [posStyle, setPosStyle] = useState<React.CSSProperties>({})
   const anchorRef = anchorProp ?? inputWrapperRef
 
-  const updatePosition = useCallback(() => {
+  useEffect(() => {
+    if (!open) return
+    const updatePosition = () => {
     const el = anchorRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
@@ -394,18 +405,16 @@ const AutocompletePositioner = ({
     }
 
     setPosStyle(s)
-  }, [anchorRef, side, sideOffset, align, alignOffset])
-
-  useEffect(() => {
-    if (!open) return
-    updatePosition()
+    }
+    const frame = requestAnimationFrame(updatePosition)
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
     return () => {
+      cancelAnimationFrame(frame)
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [open, updatePosition])
+  }, [open, anchorRef, side, sideOffset, align, alignOffset])
 
   return (
     <div
@@ -475,13 +484,15 @@ const AutocompleteContent = ({
 
 // -- List --
 
-interface AutocompleteListProps extends React.HTMLAttributes<HTMLDivElement> {}
+type AutocompleteListProps = React.HTMLAttributes<HTMLDivElement>
 
 const AutocompleteList = ({ className, ...props }: AutocompleteListProps) => {
+  const { listId } = useAc()
   return (
     <div
       data-slot='autocomplete-list'
       role='listbox'
+      id={listId}
       className={cn(
         'max-h-96 overflow-y-auto overscroll-contain scroll-py-1 not-empty:px-1 not-empty:py-1',
         '[scrollbar-width:thin] [scrollbar-color:var(--muted-foreground)_transparent]',
@@ -530,7 +541,7 @@ const AutocompleteItem = ({
   children,
   ...props
 }: AutocompleteItemProps) => {
-  const { selectedValue, highlightedValue, setHighlightedValue, selectItem, registerItem, unregisterItem } =
+  const { listId, selectedValue, highlightedValue, setHighlightedValue, selectItem, registerItem, unregisterItem } =
     useAc()
   const itemRef = useRef<HTMLDivElement>(null)
 
@@ -554,6 +565,7 @@ const AutocompleteItem = ({
     <div
       ref={itemRef}
       role='option'
+      id={listId + '-' + encodeURIComponent(value)}
       aria-selected={isSelected}
       aria-disabled={disabled || undefined}
       data-slot='autocomplete-item'

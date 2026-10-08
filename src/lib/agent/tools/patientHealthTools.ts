@@ -9,8 +9,8 @@ export const calculatePatientAgeAndLifeStageTool = new FunctionTool({
   description: 'Calculates the exact chronological age, pediatric/geriatric category, and developmental precautions from a birthdate.',
   parameters: z.object({
     date_of_birth: z.string().describe('ISO format birthdate YYYY-MM-DD'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { date_of_birth: string }) => {
     const { date_of_birth = '' } = input || {}
     const dob = new Date(date_of_birth)
     if (isNaN(dob.getTime())) {
@@ -86,8 +86,8 @@ export const checkDrugSafetyAndAllergiesTool = new FunctionTool({
     patient_allergies: z.array(z.string()).describe('List of known drug or food allergies'),
     patient_age: z.number().optional().describe('Patient age in years'),
     active_medicines: z.array(z.string()).optional().describe('List of currently active cabinet medicines'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { medicine_name: string; patient_allergies: string[]; patient_age?: number; active_medicines?: string[] }) => {
     const {
       medicine_name = '',
       patient_allergies = [],
@@ -138,7 +138,9 @@ export const checkDrugSafetyAndAllergiesTool = new FunctionTool({
     }
 
     return {
-      safety_cleared: conflicts.length === 0,
+      safety_cleared: false,
+      assessment_status: conflicts.length ? 'WARNING' : 'UNKNOWN',
+      assessment_limitations: 'Literal matching is incomplete and cannot establish drug/allergy compatibility',
       critical_conflicts: conflicts,
       clinical_warnings: warnings,
       overall_risk: conflicts.length > 0 ? 'HIGH_RISK' : warnings.length > 0 ? 'MODERATE_CAUTION' : 'CLEARED_SAFE',

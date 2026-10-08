@@ -1,37 +1,24 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Edit3, UserRound, Calendar, ShieldAlert, Activity, Loader2, Save } from 'lucide-react'
-import { calculateAge } from '@/lib/utils/ageCalculator'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useId } from 'react';
+import { useRouter } from 'next/navigation';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { UserRound, Calendar, ShieldAlert, Activity, Loader2, Save } from 'lucide-react';
+import { calculateAge } from '@/lib/utils/ageCalculator';
+import { createClient } from '@/lib/supabase/client';
+import type { MemberRecord } from '@/lib/types/records';
 
 interface EditFamilyMemberModalProps {
-  member: {
-    id: string
-    full_name: string
-    relationship: string
-    date_of_birth?: string | null
-    birth_date?: string | null
-    gender?: string
-    allergies?: string[]
-    chronic_conditions?: string[]
-    notes?: string | null
-  }
-  trigger?: React.ReactNode
+  member: MemberRecord
+  trigger?: React.ReactElement
 }
 
 export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModalProps) {
+  const formId = useId()
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [fullName, setFullName] = useState(member.full_name || '')
@@ -48,6 +35,7 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSaving) return
     setIsSaving(true)
     setErrorMessage(null)
 
@@ -60,7 +48,7 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
         ? conditions.split(',').map((s) => s.trim()).filter(Boolean)
         : []
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('family_members')
         .update({
           full_name: fullName.trim(),
@@ -72,10 +60,12 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
           notes: notes.trim() || null,
         })
         .eq('id', member.id)
+        .select('id')
+        .single()
 
-      if (error) {
+      if (error || !data) {
         console.error('Error updating member:', error)
-        setErrorMessage(error.message)
+        setErrorMessage(error?.message || 'The profile is unavailable. Please retry.')
         setIsSaving(false)
         return
       }
@@ -83,33 +73,17 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
       setOpen(false)
       setIsSaving(false)
       router.refresh()
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to update member:', err)
-      setErrorMessage(err.message || 'Failed to update profile')
+      setErrorMessage(err instanceof Error ? err.message : 'Failed to update profile')
       setIsSaving(false)
     }
   }
 
   return (
-    <>
-      {trigger ? (
-        <div onClick={() => setOpen(true)} className="inline-flex cursor-pointer">
-          {trigger}
-        </div>
-      ) : (
-        <Button
-          onClick={() => setOpen(true)}
-          variant="outline"
-          size="sm"
-          className="rounded-xl text-xs font-extrabold bg-[#DDFBEF]/50 text-[#2F4858] border-[#B7EED8] hover:bg-[#DDFBEF] flex items-center gap-1.5 cursor-pointer shadow-xs"
-        >
-          <Edit3 className="size-3.5" />
-          <span>Edit Profile</span>
-        </Button>
-      )}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[96vw] sm:w-[92vw] sm:max-w-xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 md:p-8 bg-white border border-[#2F4858]/15 rounded-2xl sm:rounded-3xl shadow-2xl text-[#2F4858]">
+    <Dialog open={open} onOpenChange={next => { if (!isSaving) setOpen(next) }}>
+      <DialogTrigger render={trigger?.type === 'span' ? <button type="button" className="underline text-sm">{trigger}</button> : trigger || <Button variant="outline">Edit profile</Button>} />
+        <DialogContent className="w-[96vw] sm:w-[92vw] sm:max-w-xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6 md:p-8 bg-white border border-[#2F4858]/15 rounded-2xl sm:rounded-3xl shadow-2xl text-[#2F4858]">
           <DialogHeader className="pb-3 border-b border-[#2F4858]/10">
             <div className="flex items-center gap-3">
               <div className="size-10 sm:size-11 rounded-2xl bg-[#2F4858] text-[#DDFBEF] flex items-center justify-center shadow-sm shrink-0">
@@ -119,7 +93,7 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
                 <DialogTitle className="text-base sm:text-lg font-black text-[#2F4858]">
                   Edit Profile: {member.full_name}
                 </DialogTitle>
-                <p className="text-xs font-semibold text-[#2F4858]/70">
+                <p className="text-xs font-semibold text-muted-foreground">
                   Update birthdate, allergies, chronic conditions, and age-aware guardian settings.
                 </p>
               </div>
@@ -127,16 +101,16 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
           </DialogHeader>
 
           {errorMessage && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+            <div id={formId + '-error'} role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
               {errorMessage}
             </div>
           )}
 
-          <form onSubmit={handleSave} className="space-y-4 pt-1">
+          <form aria-describedby={errorMessage ? formId + '-error' : undefined} onSubmit={handleSave} className="space-y-4 pt-1"><fieldset disabled={isSaving} className="contents">
             {/* Full Name */}
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858]">Full Name *</Label>
-              <Input
+              <Label htmlFor={formId + "-field-1"} className="text-xs font-bold text-[#2F4858]">Full Name *</Label>
+              <Input aria-label="Full Name *" id={formId + "-field-1"}
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -147,8 +121,8 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
             {/* Relationship & Gender */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-[#2F4858]">Relationship *</Label>
-                <select
+                <Label htmlFor={formId + "-field-2"} className="text-xs font-bold text-[#2F4858]">Relationship *</Label>
+                <select aria-label="Relationship *" id={formId + "-field-2"}
                   required
                   value={relationship}
                   onChange={(e) => setRelationship(e.target.value)}
@@ -166,8 +140,8 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-[#2F4858]">Gender</Label>
-                <select
+                <Label htmlFor={formId + "-field-3"} className="text-xs font-bold text-[#2F4858]">Gender</Label>
+                <select aria-label="Gender" id={formId + "-field-3"}
                   value={gender}
                   onChange={(e) => setGender(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl border border-[#2F4858]/20 bg-[#F8FDFB] text-xs font-semibold text-[#2F4858] focus:ring-1 focus:ring-[#2F4858] focus:outline-none cursor-pointer"
@@ -194,7 +168,7 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
                 )}
               </div>
 
-              <Input
+              <Input aria-label="date Of Birth" id={formId + "-field-4"}
                 type="date"
                 value={dateOfBirth}
                 onChange={(e) => setDateOfBirth(e.target.value)}
@@ -204,11 +178,11 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
 
             {/* Known Allergies */}
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858] flex items-center gap-1.5">
+              <Label htmlFor={formId + "-field-5"} className="text-xs font-bold text-[#2F4858] flex items-center gap-1.5">
                 <ShieldAlert className="size-3.5 text-rose-600" />
                 <span>Known Allergies (Comma-separated)</span>
               </Label>
-              <Input
+              <Input aria-label="Known Allergies (Comma-separated)" id={formId + "-field-5"}
                 value={allergies}
                 onChange={(e) => setAllergies(e.target.value)}
                 placeholder="e.g. Penicillin, Sulfa drugs, Peanuts"
@@ -218,11 +192,11 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
 
             {/* Chronic Conditions */}
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858] flex items-center gap-1.5">
+              <Label htmlFor={formId + "-field-6"} className="text-xs font-bold text-[#2F4858] flex items-center gap-1.5">
                 <Activity className="size-3.5 text-[#2F4858]" />
                 <span>Chronic Conditions (Comma-separated)</span>
               </Label>
-              <Input
+              <Input aria-label="Chronic Conditions (Comma-separated)" id={formId + "-field-6"}
                 value={conditions}
                 onChange={(e) => setConditions(e.target.value)}
                 placeholder="e.g. Type 2 Diabetes, Hypertension, Asthma"
@@ -232,8 +206,8 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
 
             {/* Personal Health Notes */}
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858]">Health Notes & Physician Info</Label>
-              <textarea
+              <Label htmlFor={formId + "-field-7"} className="text-xs font-bold text-[#2F4858]">Health Notes & Physician Info</Label>
+              <textarea aria-label="Health Notes & Physician Info" id={formId + "-field-7"}
                 rows={2}
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
@@ -247,7 +221,7 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setOpen(false)}
+                disabled={isSaving} onClick={() => setOpen(false)}
                 className="h-10 rounded-xl text-xs font-bold"
               >
                 Cancel
@@ -270,9 +244,8 @@ export function EditFamilyMemberModal({ member, trigger }: EditFamilyMemberModal
                 )}
               </Button>
             </div>
-          </form>
+          </fieldset></form>
         </DialogContent>
       </Dialog>
-    </>
   )
 }

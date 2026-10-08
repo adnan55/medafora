@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/table'
 import { ChevronDown, ChevronUp, ExternalLink, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react'
 
-interface AuditLog {
+export interface AuditLog {
   id: string
   medicine_id: string
   checked_at: string
@@ -29,19 +29,19 @@ interface AuditLog {
 
 function StatusBadge({ status }: { status: string }) {
   if (status === 'BANNED') return (
-    <Badge variant="destructive" className="font-black text-[9px] uppercase px-2 py-0.5 rounded-full">BANNED</Badge>
+    <Badge variant="destructive" className="font-black text-sm uppercase px-2 py-0.5 rounded-full">BANNED</Badge>
   )
   if (status === 'WARNING') return (
-    <Badge variant="outline" className="font-bold text-[9px] bg-amber-100 text-amber-800 border-amber-200 px-2 py-0.5 rounded-full">WARNING</Badge>
+    <Badge variant="outline" className="font-bold text-sm bg-amber-100 text-amber-800 border-amber-200 px-2 py-0.5 rounded-full">WARNING</Badge>
   )
   return (
-    <Badge variant="outline" className="font-bold text-[9px] bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8] px-2 py-0.5 rounded-full">CLEARED</Badge>
+    <Badge variant="outline" className="font-bold text-sm bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8] px-2 py-0.5 rounded-full">{status === 'CLEARED' ? 'NO ALERT REPORTED' : 'UNKNOWN'}</Badge>
   )
 }
 
 function DetailPanel({ log }: { log: AuditLog }) {
   const isBanned = log.result_status === 'BANNED'
-  const isWarning = log.result_status === 'WARNING'
+  const isWarning = log.result_status !== 'BANNED' && log.result_status !== 'CLEARED'
 
   const bannerClass = isBanned
     ? 'bg-rose-50 border-rose-200'
@@ -54,8 +54,8 @@ function DetailPanel({ log }: { log: AuditLog }) {
   const headline = isBanned
     ? 'This medicine is BANNED — do not use it'
     : isWarning
-    ? 'Safety Warning — use with caution'
-    : 'This medicine is Safe & Approved'
+    ? log.result_status === 'WARNING' ? 'Unverified warning — review required' : 'Check incomplete — status unknown'
+    : 'No alert reported in this check; this is not a safety guarantee'
 
   return (
     <div className="space-y-3 pt-1">
@@ -78,20 +78,20 @@ function DetailPanel({ log }: { log: AuditLog }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {log.medicines?.salt_composition && (
           <div className="bg-white rounded-xl border border-[#2F4858]/10 p-3">
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#2F4858]/40 mb-0.5">Active Ingredients</p>
+            <p className="text-sm font-extrabold uppercase tracking-wider text-muted-foreground mb-0.5">Active Ingredients</p>
             <p className="text-xs font-semibold text-[#2F4858] leading-snug break-words">{log.medicines.salt_composition}</p>
           </div>
         )}
         <div className="bg-white rounded-xl border border-[#2F4858]/10 p-3">
-          <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#2F4858]/40 mb-0.5">Scanned On</p>
+          <p className="text-sm font-extrabold uppercase tracking-wider text-muted-foreground mb-0.5">Scanned On</p>
           <p className="text-xs font-semibold text-[#2F4858]">
             {new Date(log.checked_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
           </p>
         </div>
         {log.source_reference && (
           <div className="col-span-1 sm:col-span-2 bg-white rounded-xl border border-[#2F4858]/10 p-3">
-            <p className="text-[10px] font-extrabold uppercase tracking-wider text-[#2F4858]/40 mb-0.5">Reference & AI Model</p>
-            <p className="text-xs font-medium text-[#2F4858]/70 leading-snug break-words">{log.source_reference}</p>
+            <p className="text-sm font-extrabold uppercase tracking-wider text-muted-foreground mb-0.5">Reference & AI Model</p>
+            <p className="text-xs font-medium text-muted-foreground leading-snug break-words">{log.source_reference}</p>
           </div>
         )}
       </div>
@@ -119,7 +119,7 @@ export function AuditLogTable({ logs }: { logs: AuditLog[] }) {
 
   if (!logs || logs.length === 0) {
     return (
-      <div className="px-4 py-10 text-center text-[#2F4858]/50 text-xs font-medium">
+      <div className="px-4 py-10 text-center text-muted-foreground text-xs font-medium">
         No audit logs found. Run a deep scan to get started.
       </div>
     )
@@ -140,13 +140,13 @@ export function AuditLogTable({ logs }: { logs: AuditLog[] }) {
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-extrabold text-[#2F4858] truncate">{log.medicines?.medicine_name}</p>
-                  <p className="text-[10px] text-[#2F4858]/60 font-medium truncate mt-0.5">{log.medicines?.salt_composition}</p>
+                  <p className="text-sm text-muted-foreground font-medium truncate mt-0.5">{log.medicines?.salt_composition}</p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <StatusBadge status={log.result_status} />
                   {isExpanded
-                    ? <ChevronUp className="w-4 h-4 text-[#2F4858]/50" />
-                    : <ChevronDown className="w-4 h-4 text-[#2F4858]/50" />}
+                    ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
+                    : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                 </div>
               </button>
 
@@ -160,7 +160,7 @@ export function AuditLogTable({ logs }: { logs: AuditLog[] }) {
       {/* ── DESKTOP: Table (shown only on sm+) ── */}
       <div className="hidden sm:block overflow-x-auto">
         <Table className="min-w-full">
-          <TableHeader className="bg-[#F8FDFB] text-[#2F4858]/70 uppercase text-[10px] font-extrabold border-b border-[#2F4858]/15">
+          <TableHeader className="bg-[#F8FDFB] text-muted-foreground uppercase text-sm font-extrabold border-b border-[#2F4858]/15">
             <TableRow>
               <TableHead className="px-4 py-3 font-extrabold text-[#2F4858]">Medicine</TableHead>
               <TableHead className="hidden md:table-cell px-4 py-3 font-extrabold text-[#2F4858]">Scan Date</TableHead>
@@ -180,9 +180,9 @@ export function AuditLogTable({ logs }: { logs: AuditLog[] }) {
                   >
                     <TableCell className="px-4 py-3 font-semibold text-[#2F4858] max-w-[180px]">
                       <p className="font-extrabold truncate">{log.medicines?.medicine_name}</p>
-                      <p className="text-[11px] text-[#2F4858]/70 font-medium truncate">{log.medicines?.salt_composition}</p>
+                      <p className="text-sm text-muted-foreground font-medium truncate">{log.medicines?.salt_composition}</p>
                     </TableCell>
-                    <TableCell className="hidden md:table-cell px-4 py-3 text-[#2F4858]/70 whitespace-nowrap font-medium">
+                    <TableCell className="hidden md:table-cell px-4 py-3 text-muted-foreground whitespace-nowrap font-medium">
                       {new Date(log.checked_at).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap">

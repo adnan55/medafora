@@ -1,22 +1,7 @@
 import { FunctionTool, LOAD_MEMORY } from '@google/adk'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-
-interface FallbackMemoryItem {
-  id: string
-  user_id?: string
-  family_member_id: string
-  patient_name: string
-  timestamp: string
-  category: string
-  headline: string
-  details: string
-  underlying_reason_or_mechanism: string
-  recommended_actions: string
-}
-
-// In-memory fallback in case of transient DB connectivity
-const localFallbackMemories: FallbackMemoryItem[] = []
+import { ownedMember } from '@/lib/server/requestGuard'
 
 /**
  * Tool: Record Clinical Memory & Diagnostic Anomaly to Supabase DB
@@ -38,8 +23,8 @@ export const recordClinicalMemoryTool = new FunctionTool({
     details: z.string().describe('Detailed clinical findings, test numbers, or symptoms'),
     underlying_reason_or_mechanism: z.string().describe('Why this occurred or the physiological cause behind it'),
     recommended_actions: z.string().describe('Doctor directives, dietary guidelines, or contraindicated medicines'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { family_member_id: string; patient_name: string; category: string; headline: string; details: string; underlying_reason_or_mechanism: string; recommended_actions: string }) => {
     const {
       family_member_id,
       patient_name = 'Family Member',
@@ -54,6 +39,8 @@ export const recordClinicalMemoryTool = new FunctionTool({
       const supabase = await createClient()
       const { data: { user } } = await supabase.auth.getUser()
 
+      if (!user || !family_member_id) return { status: 'UNAUTHORIZED' }
+      await ownedMember(supabase, user.id, family_member_id)
       if (user && family_member_id) {
         const { data, error } = await supabase
           .from('patient_clinical_memories')
@@ -82,30 +69,10 @@ export const recordClinicalMemoryTool = new FunctionTool({
         }
       }
     } catch (dbErr) {
-      console.warn('Supabase DB memory insert fallback:', dbErr)
+      console.warn('Clinical memory insert failed:', dbErr)
     }
 
-    // Local in-memory fallback
-    const fallbackItem: FallbackMemoryItem = {
-      id: Math.random().toString(36).substring(2, 9),
-      family_member_id: family_member_id || 'default_member',
-      patient_name,
-      timestamp: new Date().toISOString(),
-      category,
-      headline,
-      details,
-      underlying_reason_or_mechanism,
-      recommended_actions,
-    }
-    localFallbackMemories.push(fallbackItem)
-
-    return {
-      status: 'SAVED_TO_SESSION_MEMORY',
-      memory_id: fallbackItem.id,
-      patient: patient_name,
-      headline,
-      message: `Clinical memory recorded in session memory for ${patient_name}.`,
-    }
+    return { status: 'UNAVAILABLE', message: 'Clinical memory was not saved.' }
   },
 })
 
@@ -118,16 +85,19 @@ export const recallPatientMemoriesTool = new FunctionTool({
   parameters: z.object({
     family_member_id: z.string().optional().describe('ID of the family member'),
     query: z.string().optional().describe('Keywords or medical topic to search (e.g. "blood sugar", "allergies", "kidney", "rash")'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { family_member_id?: string; query?: string }) => {
     const { family_member_id, query = '' } = input || {}
     const qLower = String(query).toLowerCase()
 
-    let dbRecords: any[] = []
+    let dbRecords: Record<string, string>[] = []
 
     try {
       const supabase = await createClient()
-      let req = supabase.from('patient_clinical_memories').select('*')
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return { status: 'UNAUTHORIZED', total_memories_found: 0, memories: [] }
+      if (family_member_id) await ownedMember(supabase, user.id, family_member_id)
+      let req = supabase.from('patient_clinical_memories').select('*').eq('user_id', user.id)
 
       if (family_member_id) {
         req = req.eq('family_member_id', family_member_id)
@@ -135,14 +105,16 @@ export const recallPatientMemoriesTool = new FunctionTool({
 
       const { data, error } = await req.order('created_at', { ascending: false }).limit(20)
 
+      if (error) return { status: 'UNAVAILABLE', total_memories_found: 0, memories: [] }
       if (!error && Array.isArray(data)) {
         dbRecords = data
       }
     } catch (err) {
-      console.warn('Supabase DB memory select fallback:', err)
+      console.warn('Clinical memory read failed:', err)
+      return { status: 'UNAVAILABLE', total_memories_found: 0, memories: [] }
     }
 
-    // Merge with local fallback
+    // Shape owned database results for recall
     const combined = [
       ...dbRecords.map((r) => ({
         id: r.id,
@@ -154,7 +126,7 @@ export const recallPatientMemoriesTool = new FunctionTool({
         underlying_reason_or_mechanism: r.underlying_reason_or_mechanism,
         recommended_actions: r.recommended_actions,
       })),
-      ...localFallbackMemories.filter((m) => !family_member_id || m.family_member_id === family_member_id),
+
     ]
 
     const matches = combined.filter((item) => {

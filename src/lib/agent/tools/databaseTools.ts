@@ -11,8 +11,8 @@ export const fetchMedicineCabinetTool = new FunctionTool({
   parameters: z.object({
     family_member_id: z.string().optional().describe('Filter by specific family member ID'),
     include_expired: z.boolean().optional().default(true).describe('Include expired medicines in query'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { family_member_id?: string; include_expired?: boolean }) => {
     const { family_member_id, include_expired = true } = input || {}
 
     try {
@@ -61,8 +61,8 @@ export const fetchPatientClinicalHistoryTool = new FunctionTool({
   description: 'Fetches diagnostic lab reports, clinical diagnoses, and recent at-home vitals (blood glucose, blood pressure, pulse) for a patient from Supabase.',
   parameters: z.object({
     family_member_id: z.string().describe('ID of the family member'),
-  }) as any,
-  execute: async (input: any) => {
+  }),
+  execute: async (input: { family_member_id: string }) => {
     const { family_member_id = '' } = input || {}
 
     try {

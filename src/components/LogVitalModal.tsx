@@ -1,35 +1,21 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import {
-  Activity,
-  Heart,
-  Droplet,
-  Percent,
-  Weight,
-  Thermometer,
-  Wind,
-  Calendar,
-  Clock,
-  Plus,
-  CheckCircle2,
-  AlertTriangle,
-  Info,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { createVitalLog } from '@/app/actions/vitals'
+import { useState, useId } from 'react';
+import { useRouter } from 'next/navigation';
+import { Activity, Heart, Droplet, Percent, Weight, Thermometer, Wind, Info } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { createVitalLog } from '@/app/actions/vitals';
 
 interface LogVitalModalProps {
   familyMemberId?: string
   familyMemberName?: string
-  familyMembers?: Array<{ id: string; full_name: string; relationship?: string }>
+  familyMembers?: Array<{ id: string; full_name: string; relationship?: string | null }>
   defaultType?: string
-  trigger?: React.ReactNode
+  trigger?: React.ReactElement
   onSuccess?: () => void
 }
 
@@ -100,7 +86,11 @@ const VITAL_PRESETS = [
   },
 ]
 
-export function LogVitalModal({
+export function LogVitalModal(props: LogVitalModalProps) {
+  return <VitalDraft key={(props.familyMemberId || "select-member") + (props.defaultType || "")} {...props} />
+}
+
+function VitalDraft({
   familyMemberId,
   familyMemberName,
   familyMembers,
@@ -108,12 +98,13 @@ export function LogVitalModal({
   trigger,
   onSuccess,
 }: LogVitalModalProps) {
+  const formId = useId()
   const router = useRouter()
   const [open, setOpen] = useState(false)
 
   // Member selection state
   const [selectedMemberId, setSelectedMemberId] = useState(
-    familyMemberId || (familyMembers && familyMembers.length > 0 ? familyMembers[0].id : '')
+    familyMemberId || ''
   )
   const currentMember = familyMembers?.find(m => m.id === selectedMemberId)
   const activeMemberName = familyMemberName || currentMember?.full_name || 'Family Member'
@@ -124,7 +115,7 @@ export function LogVitalModal({
   const [value, setValue] = useState('')
   const [valueSecondary, setValueSecondary] = useState('')
   const [context, setContext] = useState(currentPreset.contexts[0])
-  const [recordedDate, setRecordedDate] = useState(new Date().toISOString().split('T')[0])
+  const [recordedDate, setRecordedDate] = useState((() => { const now = new Date(); return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}` })())
   const [recordedTime, setRecordedTime] = useState(new Date().toTimeString().slice(0, 5))
   const [notes, setNotes] = useState('')
   
@@ -141,6 +132,8 @@ export function LogVitalModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSaving) return
+    if (!(familyMemberId || selectedMemberId)) { setSaveError('Select a family member before recording a reading.'); return }
     if (!value || isNaN(Number(value))) {
       setSaveError('Please enter a valid numeric value.')
       return
@@ -158,7 +151,7 @@ export function LogVitalModal({
       const combinedDateTime = new Date(`${recordedDate}T${recordedTime || '12:00'}:00`).toISOString()
 
       const res = await createVitalLog({
-        family_member_id: selectedMemberId,
+        family_member_id: familyMemberId || selectedMemberId,
         vital_type: selectedType,
         name: currentPreset.name,
         value: Number(value),
@@ -180,32 +173,17 @@ export function LogVitalModal({
       setOpen(false)
       router.refresh()
       onSuccess?.()
-    } catch (err: any) {
-      setSaveError(err.message || 'Error saving vital sign.')
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Error saving vital sign.')
     } finally {
       setIsSaving(false)
     }
   }
 
   return (
-    <>
-      {trigger ? (
-        <div onClick={() => setOpen(true)} className="inline-flex cursor-pointer">
-          {trigger}
-        </div>
-      ) : (
-        <Button
-          onClick={() => setOpen(true)}
-          size="sm"
-          className="bg-[#2F4858] hover:bg-[#1E313D] text-[#DDFBEF] rounded-xl font-extrabold text-xs shadow-sm flex items-center gap-1.5 cursor-pointer"
-        >
-          <Plus className="size-4" />
-          <span>Log At-Home Vitals / Sugar / BP</span>
-        </Button>
-      )}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[96vw] sm:max-w-xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 md:p-8 bg-white border border-[#2F4858]/15 rounded-2xl sm:rounded-3xl shadow-2xl text-[#2F4858]">
+    <Dialog open={open} onOpenChange={next => { if (!isSaving) setOpen(next) }}>
+      <DialogTrigger render={trigger?.type === 'span' ? <button type="button" className="underline text-sm">{trigger}</button> : trigger || <Button variant="outline">Log home reading</Button>} />
+        <DialogContent className="w-[96vw] sm:max-w-xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6 md:p-8 bg-white border border-[#2F4858]/15 rounded-2xl sm:rounded-3xl shadow-2xl text-[#2F4858]">
         <DialogHeader className="pb-4 border-b border-[#2F4858]/10">
           <div className="flex items-center gap-3">
             <div className="size-10 sm:size-11 rounded-2xl bg-[#2F4858] text-[#DDFBEF] flex items-center justify-center shadow-sm shrink-0">
@@ -215,7 +193,7 @@ export function LogVitalModal({
               <DialogTitle className="text-base sm:text-lg font-black text-[#2F4858]">
                 Log Vital Sign for {activeMemberName}
               </DialogTitle>
-              <p className="text-xs font-semibold text-[#2F4858]/70">
+              <p className="text-xs font-semibold text-muted-foreground">
                 Record at-home glucometer readings, blood pressure, pulse, or body vitals.
               </p>
             </div>
@@ -223,14 +201,20 @@ export function LogVitalModal({
         </DialogHeader>
 
         {/* Member Selector if multiple family members provided */}
-        {familyMembers && familyMembers.length > 1 && (
+        {!familyMemberId && familyMembers && familyMembers.length > 0 && (
           <div className="p-3 sm:p-3.5 rounded-2xl bg-[#F8FDFB] border border-[#2F4858]/15 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mt-2">
-            <Label className="text-xs font-bold text-[#2F4858] shrink-0">Select Family Member:</Label>
-            <select
+            <Label htmlFor={formId + "-field-1"} className="text-xs font-bold text-[#2F4858] shrink-0">Select Family Member:</Label>
+            <select aria-label="Select Family Member:" id={formId + "-field-1"}
+              required
               value={selectedMemberId}
-              onChange={(e) => setSelectedMemberId(e.target.value)}
+              disabled={isSaving}
+              onChange={(e) => {
+                if ((value || valueSecondary || notes) && !window.confirm("Changing the member clears this unsaved reading. Continue?")) return
+                setValue(""); setValueSecondary(""); setNotes(""); setSaveError(""); setSelectedMemberId(e.target.value)
+              }}
               className="h-10 px-3 rounded-xl border border-[#2F4858]/20 bg-white text-xs font-bold text-[#2F4858] focus:outline-none focus:ring-1 focus:ring-[#2F4858] w-full sm:max-w-xs cursor-pointer"
             >
+              <option value="">Select a family member</option>
               {familyMembers.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.full_name} {m.relationship ? `(${m.relationship})` : ''}
@@ -240,10 +224,10 @@ export function LogVitalModal({
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-5 pt-2">
+        <form aria-describedby={saveError ? formId + '-error' : undefined} onSubmit={handleSubmit} className="space-y-5 pt-2"><fieldset disabled={isSaving} className="contents">
           {/* Preset Buttons Grid */}
           <div className="space-y-2">
-            <Label className="text-xs font-black uppercase tracking-wider text-[#2F4858]/70">
+            <Label className="text-xs font-black uppercase tracking-wider text-muted-foreground">
               Select Measurement Type
             </Label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -253,6 +237,7 @@ export function LogVitalModal({
                 return (
                   <button
                     key={preset.type}
+                    aria-label={preset.name} aria-pressed={isSelected}
                     type="button"
                     onClick={() => handleSelectPreset(preset.type)}
                     className={`p-2.5 rounded-2xl border text-left flex flex-col justify-between gap-1.5 transition-all cursor-pointer ${
@@ -264,7 +249,7 @@ export function LogVitalModal({
                     <Icon className={`size-4 ${isSelected ? 'text-[#DDFBEF]' : 'text-[#2F4858]'}`} />
                     <div>
                       <p className="text-xs font-extrabold truncate">{preset.name.split(' ')[0]}</p>
-                      <p className={`text-[10px] font-bold opacity-80 ${isSelected ? 'text-[#DDFBEF]' : 'text-[#2F4858]/60'}`}>
+                      <p className={`text-sm font-bold opacity-80 ${isSelected ? 'text-[#DDFBEF]' : 'text-muted-foreground'}`}>
                         {preset.unit}
                       </p>
                     </div>
@@ -280,7 +265,7 @@ export function LogVitalModal({
               <span className="text-xs font-black uppercase text-[#2F4858] tracking-wider">
                 {currentPreset.name} Measurement
               </span>
-              <span className="text-xs font-bold text-[#2F4858]/70">
+              <span className="text-xs font-bold text-muted-foreground">
                 Unit: <span className="text-[#2F4858] font-black">{currentPreset.unit}</span>
               </span>
             </div>
@@ -288,9 +273,9 @@ export function LogVitalModal({
             {selectedType === 'BLOOD_PRESSURE' ? (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-[#2F4858]">Systolic (Upper)</Label>
+                  <Label htmlFor={formId + "-field-2"} className="text-sm font-bold text-[#2F4858]">Systolic (Upper)</Label>
                   <div className="relative">
-                    <Input
+                    <Input aria-label="Systolic (Upper)" id={formId + "-field-2"}
                       type="number"
                       step="1"
                       required
@@ -299,14 +284,14 @@ export function LogVitalModal({
                       onChange={(e) => setValue(e.target.value)}
                       className="h-11 rounded-xl bg-white border-[#2F4858]/20 text-base font-black text-[#2F4858] pr-12"
                     />
-                    <span className="absolute right-3 top-3 text-[10px] font-bold text-[#2F4858]/60">SYS</span>
+                    <span className="absolute right-3 top-3 text-sm font-bold text-muted-foreground">SYS</span>
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-[#2F4858]">Diastolic (Lower)</Label>
+                  <Label htmlFor={formId + "-field-3"} className="text-sm font-bold text-[#2F4858]">Diastolic (Lower)</Label>
                   <div className="relative">
-                    <Input
+                    <Input aria-label="Diastolic (Lower)" id={formId + "-field-3"}
                       type="number"
                       step="1"
                       required
@@ -315,15 +300,15 @@ export function LogVitalModal({
                       onChange={(e) => setValueSecondary(e.target.value)}
                       className="h-11 rounded-xl bg-white border-[#2F4858]/20 text-base font-black text-[#2F4858] pr-12"
                     />
-                    <span className="absolute right-3 top-3 text-[10px] font-bold text-[#2F4858]/60">DIA</span>
+                    <span className="absolute right-3 top-3 text-sm font-bold text-muted-foreground">DIA</span>
                   </div>
                 </div>
               </div>
             ) : (
               <div className="space-y-1">
-                <Label className="text-[11px] font-bold text-[#2F4858]">Enter Reading Value ({currentPreset.unit})</Label>
+                <Label htmlFor={formId + "-field-4"} className="text-sm font-bold text-[#2F4858]">Enter Reading Value ({currentPreset.unit})</Label>
                 <div className="relative">
-                  <Input
+                  <Input aria-label="Enter Reading Value ( )" id={formId + "-field-4"}
                     type="number"
                     step="any"
                     required
@@ -332,14 +317,14 @@ export function LogVitalModal({
                     onChange={(e) => setValue(e.target.value)}
                     className="h-11 rounded-xl bg-white border-[#2F4858]/20 text-base font-black text-[#2F4858] pr-16"
                   />
-                  <span className="absolute right-3 top-3 text-xs font-black text-[#2F4858]/60">
+                  <span className="absolute right-3 top-3 text-xs font-black text-muted-foreground">
                     {currentPreset.unit}
                   </span>
                 </div>
               </div>
             )}
 
-            <div className="text-[11px] font-semibold text-[#2F4858]/80 flex items-center gap-1.5 pt-1">
+            <div className="text-sm font-semibold text-[#2F4858]/80 flex items-center gap-1.5 pt-1">
               <Info className="size-3.5 text-[#2F4858] shrink-0" />
               <span>{currentPreset.normalRange}</span>
             </div>
@@ -352,6 +337,7 @@ export function LogVitalModal({
               {currentPreset.contexts.map((ctx) => (
                 <button
                   key={ctx}
+                  aria-pressed={context === ctx}
                   type="button"
                   onClick={() => setContext(ctx)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
@@ -369,8 +355,8 @@ export function LogVitalModal({
           {/* Date and Time */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858]">Date</Label>
-              <Input
+              <Label htmlFor={formId + "-field-5"} className="text-xs font-bold text-[#2F4858]">Date</Label>
+              <Input aria-label="Date" id={formId + "-field-5"}
                 type="date"
                 value={recordedDate}
                 onChange={(e) => setRecordedDate(e.target.value)}
@@ -378,8 +364,8 @@ export function LogVitalModal({
               />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858]">Time</Label>
-              <Input
+              <Label htmlFor={formId + "-field-6"} className="text-xs font-bold text-[#2F4858]">Time</Label>
+              <Input aria-label="Time" id={formId + "-field-6"}
                 type="time"
                 value={recordedTime}
                 onChange={(e) => setRecordedTime(e.target.value)}
@@ -390,8 +376,8 @@ export function LogVitalModal({
 
           {/* Optional Notes */}
           <div className="space-y-1">
-            <Label className="text-xs font-bold text-[#2F4858]">Notes / Symptoms (Optional)</Label>
-            <Input
+            <Label htmlFor={formId + "-field-7"} className="text-xs font-bold text-[#2F4858]">Notes / Symptoms (Optional)</Label>
+            <Input aria-label="Notes / Symptoms (Optional)" id={formId + "-field-7"}
               placeholder="e.g. Felt dizzy in morning, checked after 30 min brisk walk"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -400,7 +386,7 @@ export function LogVitalModal({
           </div>
 
           {saveError && (
-            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+            <div id={formId + '-error'} role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
               {saveError}
             </div>
           )}
@@ -410,7 +396,7 @@ export function LogVitalModal({
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              disabled={isSaving} onClick={() => setOpen(false)}
               className="h-10 rounded-xl text-xs font-bold"
             >
               Cancel
@@ -423,9 +409,8 @@ export function LogVitalModal({
               {isSaving ? 'Logging Vital...' : 'Save Vital Reading'}
             </Button>
           </div>
-        </form>
+        </fieldset></form>
       </DialogContent>
     </Dialog>
-    </>
   )
 }

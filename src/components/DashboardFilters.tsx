@@ -1,107 +1,55 @@
 'use client'
-
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Search, MapPin, Layers, ArrowUpDown } from 'lucide-react'
-import { useTransition, useState, useEffect, useCallback } from 'react'
+import { useTransition, useId } from 'react'
+import { Button } from './ui/button'
 
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-export function DashboardFilters({ uniqueStorages, uniqueForms }: { uniqueStorages: string[], uniqueForms: string[] }) {
+export function DashboardFilters({ uniqueStorages, uniqueForms }: { uniqueStorages: string[]; uniqueForms: string[] }) {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const [isPending, startTransition] = useTransition()
-  
-  const [q, setQ] = useState(searchParams.get('q') || '')
-
-  const updateFilter = useCallback((key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (value && value !== 'ALL') {
-      params.set(key, value)
-    } else {
-      params.delete(key)
+  const params = useSearchParams()
+  const [pending, startTransition] = useTransition()
+  const id = useId()
+  const fields = ['q', 'storage', 'form', 'sort', 'expiry']
+  function navigate(next: URLSearchParams) { startTransition(() => router.push('/?' + next.toString())) }
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const data = new FormData(event.currentTarget)
+    const next = new URLSearchParams(params.toString())
+    for (const key of fields) {
+      const value = String(data.get(key) || '').trim()
+      if (value && value !== 'ALL') next.set(key, value); else next.delete(key)
     }
-    startTransition(() => {
-      router.push(`/?${params.toString()}`)
-    })
-  }, [searchParams, router, startTransition])
-
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateFilter('q', q)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [q, updateFilter])
-
-  return (
-    <div className="flex flex-col md:flex-row gap-3">
-      <div className="relative flex-1 group">
-        <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[#2F4858]/50 group-focus-within:text-[#2F4858] transition-colors" />
-        <Input
-          aria-label="Search by symptom, disease, salt, or medicine name"
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by symptom (fever, cough, pain), disease, active salt, or name..."
-          className="w-full pl-10 pr-4 h-10 rounded-xl border border-[#2F4858]/20 bg-[#F8FDFB] text-xs font-semibold text-[#2F4858] placeholder:text-[#2F4858]/40 focus-visible:ring-1 focus-visible:ring-[#2F4858] focus-visible:border-[#2F4858]/40 transition-all shadow-sm"
-        />
-      </div>
-      <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 w-full md:w-auto">
-        <Select 
-          value={searchParams.get('storage') || 'ALL'} 
-          onValueChange={(value) => updateFilter('storage', value ?? 'ALL')}
-        >
-          <SelectTrigger className="h-10 bg-[#F8FDFB] border border-[#2F4858]/20 rounded-xl px-3 text-xs font-bold text-[#2F4858] w-full sm:w-[170px] shadow-sm focus:ring-1 focus:ring-[#2F4858]">
-            <div className="flex items-center gap-2">
-              <MapPin className="w-3.5 h-3.5 text-[#2F4858]/70" />
-              <SelectValue placeholder="Storage Spots" />
-            </div>
-          </SelectTrigger>
-          <SelectContent className="rounded-xl border-[#2F4858]/20 bg-[#F8FDFB] shadow-md">
-            <SelectItem value="ALL" className="text-xs font-bold focus:bg-[#DDFBEF]/50">All Storage Spots</SelectItem>
-            {uniqueStorages.map(s => (
-              <SelectItem key={s} value={s} className="text-xs font-semibold focus:bg-[#DDFBEF]/50">{s}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select 
-          value={searchParams.get('form') || 'ALL'} 
-          onValueChange={(value) => updateFilter('form', value ?? 'ALL')}
-        >
-          <SelectTrigger className="h-10 bg-[#F8FDFB] border border-[#2F4858]/20 rounded-xl px-3 text-xs font-bold text-[#2F4858] w-full sm:w-[150px] shadow-sm focus:ring-1 focus:ring-[#2F4858]">
-            <div className="flex items-center gap-2">
-              <Layers className="w-3.5 h-3.5 text-[#2F4858]/70" />
-              <SelectValue placeholder="Forms" />
-            </div>
-          </SelectTrigger>
-          <SelectContent className="rounded-xl border-[#2F4858]/20 bg-[#F8FDFB] shadow-md">
-            <SelectItem value="ALL" className="text-xs font-bold focus:bg-[#DDFBEF]/50">All Forms</SelectItem>
-            {uniqueForms.map(f => (
-              <SelectItem key={f} value={f} className="text-xs font-semibold focus:bg-[#DDFBEF]/50">{f}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select 
-          value={searchParams.get('sort') || 'expiry_asc'} 
-          onValueChange={(value) => updateFilter('sort', value ?? 'expiry_asc')}
-        >
-          <SelectTrigger className="h-10 bg-[#F8FDFB] border border-[#2F4858]/20 rounded-xl px-3 text-xs font-bold text-[#2F4858] w-full sm:w-[180px] shadow-sm focus:ring-1 focus:ring-[#2F4858]">
-            <div className="flex items-center gap-2">
-              <ArrowUpDown className="w-3.5 h-3.5 text-[#2F4858]/70" />
-              <SelectValue placeholder="Sort by" />
-            </div>
-          </SelectTrigger>
-          <SelectContent className="rounded-xl border-[#2F4858]/20 bg-[#F8FDFB] shadow-md">
-            <SelectItem value="expiry_asc" className="text-xs font-semibold focus:bg-[#DDFBEF]/50">Expiry (Earliest First)</SelectItem>
-            <SelectItem value="expiry_desc" className="text-xs font-semibold focus:bg-[#DDFBEF]/50">Expiry (Latest First)</SelectItem>
-            <SelectItem value="name_asc" className="text-xs font-semibold focus:bg-[#DDFBEF]/50">Name (A-Z)</SelectItem>
-            <SelectItem value="name_desc" className="text-xs font-semibold focus:bg-[#DDFBEF]/50">Name (Z-A)</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  )
+    next.delete('page'); navigate(next)
+  }
+  function clear() {
+    const next = new URLSearchParams(params.toString())
+    for (const key of [...fields, 'page']) next.delete(key)
+    navigate(next)
+  }
+  const control = 'block w-full min-w-0 mt-1 rounded-lg border bg-white px-3 py-2 text-base'
+  const active = fields.filter(key => params.has(key))
+  return <form onSubmit={submit} aria-busy={pending} className="rounded-xl border bg-white p-4 space-y-4">
+    <fieldset disabled={pending} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 min-w-0">
+      <label htmlFor={id + '-q'} className="sm:col-span-2 text-sm font-semibold">Search cabinet
+        <input id={id + '-q'} type="search" name="q" defaultValue={params.get('q') || ''} maxLength={160} placeholder="Medicine, ingredient or recorded notes" className={control} /></label>
+      <label className="text-sm font-semibold">Storage
+        <select name="storage" defaultValue={params.get('storage') || 'ALL'} className={control}>
+          <option value="ALL">All storage locations</option>{uniqueStorages.map(s => <option key={s} value={s}>{s}</option>)}
+        </select></label>
+      <label className="text-sm font-semibold">Medicine form
+        <select name="form" defaultValue={params.get('form') || 'ALL'} className={control}>
+          <option value="ALL">All forms</option>{uniqueForms.map(s => <option key={s} value={s}>{s}</option>)}
+        </select></label>
+      <label className="text-sm font-semibold">Sort order
+        <select name="sort" defaultValue={params.get('sort') || 'expiry_asc'} className={control}>
+          <option value="expiry_asc">Earliest expiry first</option><option value="expiry_desc">Latest expiry first</option><option value="name_asc">Name A–Z</option><option value="name_desc">Name Z–A</option>
+        </select></label>
+      <label className="text-sm font-semibold">Expiry
+        <select name="expiry" defaultValue={params.get('expiry') || 'ALL'} className={control}>
+          <option value="ALL">All expiry dates</option><option value="EXPIRED">Expired</option><option value="CRITICAL">0–15 days</option><option value="WARNING">16–45 days</option><option value="SAFE">More than 45 days</option><option value="UNKNOWN">Not recorded</option>
+        </select></label>
+      <div className="flex flex-wrap gap-2 items-end sm:col-span-2"><Button type="submit">Apply filters</Button><Button type="button" variant="outline" onClick={clear}>Clear filters</Button></div>
+    </fieldset>
+    {active.length > 0 && <p className="text-sm break-words">Current filters: {active.map(key => key + ': ' + params.get(key)).join(' · ')}</p>}
+    <p role="status" className="text-sm">{pending ? 'Updating inventory…' : 'Filters apply to medicine inventory. Reports keep their member scope.'}</p>
+  </form>
 }

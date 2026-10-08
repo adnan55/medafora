@@ -1,11 +1,11 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 
 import Image from 'next/image'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Lock, Mail } from 'lucide-react'
-import { FloatingLabel } from '@/components/shadcn-space/label/label-06'
+import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Lock, Mail } from 'lucide-react';
+import { FloatingLabel } from '@/components/shadcn-space/label/label-06';
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const supabase = await createClient()
@@ -17,28 +17,28 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F8FDFB] p-4">
+    <main id="main-content" tabIndex={-1} className="min-h-screen flex items-center justify-center bg-[#F8FDFB] p-4">
       <Card className="max-w-md w-full border border-[#2F4858]/15 shadow-sm rounded-2xl bg-white">
         <CardHeader className="text-center pb-2">
           <div className="mx-auto size-16 mb-2 flex items-center justify-center">
             <Image
               src="/logo.png"
-              alt="Medfora Logo"
+              alt="Medafora Logo"
               width={64}
               height={64}
               className="size-16 object-contain"
               priority
             />
           </div>
-          <CardTitle className="text-2xl font-black text-[#2F4858] tracking-tight">Sign in to Medfora</CardTitle>
-          <CardDescription className="text-xs font-semibold text-[#2F4858]/70">
+          <h1 className="text-2xl font-black text-[#2F4858] tracking-tight">Sign in to Medafora</h1>
+          <CardDescription className="text-xs font-semibold text-muted-foreground">
             Family Medicine, Safety & Health Hub Guardian
           </CardDescription>
         </CardHeader>
         
         <CardContent className="pt-4">
           {resolvedParams.error && (
-            <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2.5 rounded-xl text-xs font-bold text-center">
+            <div role="alert" className="mb-4 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2.5 rounded-xl text-xs font-bold text-center">
               Invalid credentials. Please check and try again.
             </div>
           )}
@@ -81,6 +81,6 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </form>
         </CardContent>
       </Card>
-    </div>
+    </main>
   )
 }

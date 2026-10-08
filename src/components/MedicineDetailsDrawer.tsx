@@ -2,75 +2,34 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import {
-  Pill,
-  ShieldAlert,
-  Ban,
-  MapPin,
-  User,
-  Calendar,
-  Layers,
-  Edit3,
-  ExternalLink,
-  XIcon,
-  Sun,
-  AlertTriangle,
-  Info,
-  CheckCircle2,
-} from "lucide-react";
+import { Pill, Ban, MapPin, User, Edit3, ExternalLink, XIcon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
+import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { expiryPresentation } from '@/lib/utils/statusPresentation';
 import { calculateExpiryStatus } from "@/lib/utils/expiryCalculator";
+import { recordedDate } from '@/lib/utils/recordReadings';
+import { RegulatoryRecordStatus } from './RegulatoryRecordStatus';
+import type { MedicineRecord } from '@/lib/types/records';
 
 interface MedicineDetailsDrawerProps {
-  medicine: any;
-  trigger?: React.ReactNode;
+  medicine: MedicineRecord;
+  trigger?: React.ReactElement;
 }
 
 export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDrawerProps) {
   const [open, setOpen] = useState(false);
 
   const expiryStatus = calculateExpiryStatus(medicine.expiry_date);
-  const isExpired = expiryStatus.label === "Expired";
-  const isUrgent = expiryStatus.label === "< 15 Days";
 
-  let statusBg = isExpired
-    ? "bg-rose-100 text-rose-800 border-rose-200"
-    : isUrgent
-    ? "bg-amber-100 text-amber-800 border-amber-200"
-    : "bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]";
-
-  let dotColor = isExpired ? "bg-rose-600" : isUrgent ? "bg-amber-600" : "bg-emerald-600";
+  const statusBg = expiryPresentation[expiryStatus.urgency].badge;
+  const dotColor = expiryPresentation[expiryStatus.urgency].dot;
 
   return (
-    <>
-      {trigger ? (
-        <div onClick={() => setOpen(true)} className="inline-flex cursor-pointer">
-          {trigger}
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="px-3.5 py-2 rounded-xl text-xs font-extrabold text-[#DDFBEF] bg-[#2F4858] hover:bg-[#1E313D] shadow-sm hover:shadow-md cursor-pointer flex items-center gap-1.5 transition-all duration-200 hover:-translate-y-1 active:translate-y-0 active:scale-95"
-        >
-          <span>View Details & Safety</span>
-          <ExternalLink className="size-3.5" />
-        </button>
-      )}
-
-      <Drawer swipeDirection="right" open={open} onOpenChange={setOpen}>
+    <Drawer swipeDirection="right" open={open} onOpenChange={setOpen}>
+      <DrawerTrigger render={trigger?.type === 'span' ? <button type="button" className="underline text-sm">{trigger}</button> : trigger || <Button variant="outline">View medicine details</Button>} />
         <DrawerContent
           side="right"
           className="h-full w-full sm:max-w-lg bg-white border-l border-[#2F4858]/15 shadow-2xl overflow-hidden flex flex-col text-[#2F4858]"
@@ -87,12 +46,12 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
               </DrawerTitle>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {medicine.strength && (
-                  <Badge variant="outline" className="text-[10px] font-bold px-1.5 py-0 bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
+                  <Badge variant="outline" className="text-sm font-bold px-1.5 py-0 bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
                     {medicine.strength}
                   </Badge>
                 )}
                 {medicine.is_daily_routine && (
-                  <Badge variant="outline" className="text-[10px] font-bold px-1.5 py-0 bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
+                  <Badge variant="outline" className="text-sm font-bold px-1.5 py-0 bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
                     <Sun className="size-2.5" /> Daily
                   </Badge>
                 )}
@@ -103,8 +62,9 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
             render={
               <button
                 type="button"
+                aria-label="Close medicine details"
                 onClick={() => setOpen(false)}
-                className="p-2 rounded-xl text-[#2F4858]/60 hover:text-[#2F4858] hover:bg-[#DDFBEF]/50 transition-colors cursor-pointer"
+                className="p-2 rounded-xl text-muted-foreground hover:text-[#2F4858] hover:bg-[#DDFBEF]/50 transition-colors cursor-pointer"
               >
                 <XIcon className="size-4" />
               </button>
@@ -120,10 +80,10 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
               <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs space-y-1.5">
                 <div className="flex items-center gap-2 text-rose-900 font-extrabold text-xs uppercase tracking-wider">
                   <Ban className="size-4 text-rose-600 shrink-0" />
-                  <span>Prohibited Drug Warning</span>
+                  <span>Recorded regulatory warning</span>
                 </div>
                 <p className="text-rose-800 text-xs font-medium leading-relaxed">
-                  {medicine.ban_notice_details || "This drug formulation has been prohibited by regulatory authorities (CDSCO / FDA). Do not consume."}
+                  {medicine.ban_notice_details || "A regulatory warning is recorded. Review the source notice and its applicability before use; no clearance is established."}
                 </p>
               </div>
             )}
@@ -131,34 +91,34 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
             {/* Quick Status Stats */}
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-2xl border border-[#2F4858]/10 bg-[#F8FDFB] space-y-1">
-                <span className="text-[10px] font-bold uppercase text-[#2F4858]/60">Expiry Urgency</span>
+                <span className="text-sm font-bold uppercase text-muted-foreground">Expiry Urgency</span>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className={`px-2 py-0.5 text-[11px] font-bold border ${statusBg} flex items-center gap-1.5`}>
+                  <Badge variant="outline" className={`px-2 py-0.5 text-sm font-bold border ${statusBg} flex items-center gap-1.5`}>
                     <span className={`size-1.5 rounded-full ${dotColor}`} />
                     {expiryStatus.label}
                   </Badge>
                 </div>
-                <p className="text-[10px] text-[#2F4858]/70 pt-0.5">
-                  Exp: {new Date(medicine.expiry_date).toLocaleDateString()}
+                <p className="text-sm text-muted-foreground pt-0.5">
+                  Expiry: {recordedDate(medicine.expiry_date)}
                 </p>
                 {medicine.manufacture_date && (
-                  <p className="text-[9px] text-[#2F4858]/60">
+                  <p className="text-sm text-muted-foreground">
                     MFG: {new Date(medicine.manufacture_date).toLocaleDateString()}
                   </p>
                 )}
               </div>
 
               <div className="p-3 rounded-2xl border border-[#2F4858]/10 bg-[#F8FDFB] space-y-1">
-                <span className="text-[10px] font-bold uppercase text-[#2F4858]/60">Storage Spot</span>
+                <span className="text-sm font-bold uppercase text-muted-foreground">Storage Spot</span>
                 <div className="flex items-center gap-1.5 text-xs font-extrabold text-[#2F4858]">
                   <MapPin className="size-3.5 text-[#2F4858]" />
                   <span className="truncate">{medicine.storage_location || "Unassigned"}</span>
                 </div>
-                <p className="text-[10px] text-[#2F4858]/70 pt-0.5">
+                <p className="text-sm text-muted-foreground pt-0.5">
                   Qty: {medicine.quantity} {medicine.unit || "units"}
                 </p>
                 {medicine.batch_number && (
-                  <p className="text-[9px] font-mono text-[#2F4858]/60">
+                  <p className="text-sm font-mono text-muted-foreground">
                     Batch: {medicine.batch_number}
                   </p>
                 )}
@@ -167,7 +127,7 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
 
             {medicine.brand_or_manufacturer && (
               <div className="p-2.5 px-3 rounded-xl bg-white border border-[#2F4858]/15 text-xs font-bold text-[#2F4858] flex items-center justify-between">
-                <span className="text-[10px] font-extrabold uppercase text-[#2F4858]/60">Manufacturer</span>
+                <span className="text-sm font-extrabold uppercase text-muted-foreground">Manufacturer</span>
                 <span>{medicine.brand_or_manufacturer}</span>
               </div>
             )}
@@ -180,7 +140,7 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
                 <span className="text-xs font-extrabold uppercase tracking-wider text-[#2F4858]">
                   Active Salt Chemistry
                 </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#DDFBEF] text-[#2F4858] border border-[#B7EED8]">
+                <span className="text-sm font-bold px-2 py-0.5 rounded-full bg-[#DDFBEF] text-[#2F4858] border border-[#B7EED8]">
                   Pharmacology
                 </span>
               </div>
@@ -198,7 +158,7 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
                 <div>
                   <span className="font-bold text-[#2F4858] block mb-0.5">Primary Use:</span>
                   <p className="text-[#2F4858]/80 font-medium">
-                    {medicine.primary_uses || "General therapeutic use"}
+                    {medicine.primary_uses || "Not recorded"}
                   </p>
                 </div>
                 {medicine.dosage_instructions && (
@@ -210,16 +170,17 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
               </div>
             </div>
 
+            <RegulatoryRecordStatus medicine={medicine} />
             {/* Assigned Member / Shared */}
             <div className="flex items-center justify-between p-3 rounded-2xl bg-[#F8FDFB] border border-[#2F4858]/10 text-xs">
-              <span className="font-bold text-[#2F4858]/70">Profile Assignment</span>
+              <span className="font-bold text-muted-foreground">Profile Assignment</span>
               {medicine.family_members ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-[#DDFBEF] text-[#2F4858] border border-[#B7EED8]">
                   <User className="size-3.5" />
                   {medicine.family_members.full_name} ({medicine.family_members.relationship})
                 </span>
               ) : (
-                <span className="text-xs font-medium text-[#2F4858]/60 italic">Household Shared</span>
+                <span className="text-xs font-medium text-muted-foreground italic">Household Shared</span>
               )}
             </div>
           </div>
@@ -248,6 +209,5 @@ export function MedicineDetailsDrawer({ medicine, trigger }: MedicineDetailsDraw
         </DrawerFooter>
       </DrawerContent>
     </Drawer>
-    </>
   );
 }

@@ -1,5 +1,6 @@
+import { authenticatedAI, readJSON, RequestError, errorResponse } from '@/lib/server/requestGuard'
+import { enrichSchema, medicineOutput } from '@/lib/validation/requests'
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { generateGeminiContent } from '@/lib/utils/geminiClient'
 
 export const dynamic = 'force-dynamic'
@@ -7,7 +8,10 @@ export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
-    const { medicineName, brandHint } = await req.json()
+    const { supabase } = await authenticatedAI()
+    const parsedBody = enrichSchema.safeParse(await readJSON(req, 16000))
+    if (!parsedBody.success) throw new RequestError('Invalid medicine name or brand')
+    const { medicineName, brandHint } = parsedBody.data
 
     if (!medicineName) {
       return NextResponse.json({ error: 'Medicine name is required' }, { status: 400 })
@@ -16,8 +20,7 @@ export async function POST(req: Request) {
     const geminiKey =
       process.env.GEMINI_API_KEY ||
       process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY
 
     let lastError = ''
 
@@ -40,11 +43,11 @@ Return a strictly valid JSON object matching this schema:
 }`
 
         const parsedResult = await generateGeminiContent([{ text: prompt }], geminiKey)
-        if (parsedResult) {
+        if (medicineOutput.safeParse(parsedResult).success) {
           return NextResponse.json({ success: true, data: parsedResult })
         }
-      } catch (geminiErr: any) {
-        lastError = geminiErr.message
+      } catch (geminiErr) {
+        lastError = geminiErr instanceof Error ? geminiErr.message : 'AI enrichment unavailable'
         console.warn('Direct Gemini API enrich warning:', geminiErr)
       }
     } else if (!geminiKey) {
@@ -53,12 +56,11 @@ Return a strictly valid JSON object matching this schema:
 
     // 2. Invoke Supabase Edge Function fallback
     try {
-      const supabase = await createClient()
       const { data, error } = await supabase.functions.invoke('enrich-medicine', {
         body: { medicineName, brandHint },
       })
 
-      if (!error && data && data.success !== false) {
+      if (!error && data && data.success !== false && medicineOutput.safeParse(data.data || data).success) {
         return NextResponse.json({ success: true, data: data.data || data })
       }
     } catch (edgeErr) {
@@ -72,8 +74,9 @@ Return a strictly valid JSON object matching this schema:
       },
       { status: 500 }
     )
-  } catch (error: any) {
+  } catch (error) {
     console.error('Route Handler Error:', error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    const failure = errorResponse(error)
+    return NextResponse.json({ success: false, error: failure.message }, { status: failure.status })
   }
 }

@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { Trash2, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { deleteFamilyMember } from '@/app/actions/family'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react';
+import { Trash2, Loader2 } from 'lucide-react';
+
+import { deleteFamilyMember } from '@/app/actions/family';
+import { useRouter } from 'next/navigation';
 
 interface DeleteFamilyMemberButtonProps {
   memberId: string
@@ -55,7 +55,7 @@ export function DeleteFamilyMemberButton({
       ) : (
         <Trash2 className="size-3.5 text-rose-600" />
       )}
-      <span className="text-[11px] font-bold">Delete</span>
+      <span className="text-sm font-bold">Delete</span>
     </button>
   )
 }

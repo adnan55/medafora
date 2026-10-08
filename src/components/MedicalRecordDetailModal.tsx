@@ -1,39 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import {
-  FileText,
-  Calendar,
-  User,
-  Building,
-  Activity,
-  ExternalLink,
-  Download,
-  Trash2,
-  AlertTriangle,
-  CheckCircle2,
-  Sparkles,
-  ShieldAlert,
-  Info,
-  Edit3,
-  Save,
-  X,
-  Plus,
-  Loader2,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { deleteMedicalRecord, updateMedicalRecord } from '@/app/actions/medicalRecords'
+import { useState, useId } from 'react';
+import { measurementPresentation } from '@/lib/utils/statusPresentation';
+import { useRouter } from 'next/navigation';
+import { FileText, Calendar, User, Building, Activity, ExternalLink, Trash2, Sparkles, Info, Edit3, Save, Plus, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { deleteMedicalRecord, updateMedicalRecord } from '@/app/actions/medicalRecords';
+import type { ReportRecord, BiomarkerRecord } from '@/lib/types/records';
 
 interface MedicalRecordDetailModalProps {
-  record: any
+  record: ReportRecord
   familyMemberName: string
-  trigger?: React.ReactNode
+  trigger?: React.ReactElement
   onDeleted?: () => void
   onUpdated?: () => void
 }
@@ -45,6 +28,7 @@ export function MedicalRecordDetailModal({
   onDeleted,
   onUpdated,
 }: MedicalRecordDetailModalProps) {
+  const formId = useId()
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -60,10 +44,10 @@ export function MedicalRecordDetailModal({
   const [hospitalClinic, setHospitalClinic] = useState(record.hospital_clinic || '')
   const [doctorName, setDoctorName] = useState(record.doctor_name || '')
   const [summary, setSummary] = useState(record.summary || '')
-  const [biomarkers, setBiomarkers] = useState<any[]>(Array.isArray(record.biomarkers) ? record.biomarkers : [])
+  const [biomarkers, setBiomarkers] = useState<BiomarkerRecord[]>(Array.isArray(record.biomarkers) ? record.biomarkers : [])
 
-  // Sync state whenever record prop changes or modal opens
-  useEffect(() => {
+  // Read the current saved record when the modal opens.
+  const resetDraft = () => {
     setTitle(record.title || '')
     setRecordType(record.record_type || 'LAB_REPORT')
     setDiagnosis(record.diagnosis || '')
@@ -74,20 +58,23 @@ export function MedicalRecordDetailModal({
     setBiomarkers(Array.isArray(record.biomarkers) ? record.biomarkers : [])
     setIsEditing(false)
     setErrorMessage('')
-  }, [record, open])
+  }
 
   const handleDelete = async () => {
+    if (isDeleting || isSaving) return
     if (!confirm('Are you sure you want to delete this medical record?')) return
     setIsDeleting(true)
     try {
       const res = await deleteMedicalRecord(record.id, record.family_member_id)
+      if (!res.success) throw new Error(res.error || 'Report could not be deleted. Please retry.')
+      if (res.cleanupPending) window.alert('The record was deleted, but attachment cleanup is pending. Please contact your administrator.')
       if (res.success) {
         setOpen(false)
         router.refresh()
         onDeleted?.()
       }
     } catch (e) {
-      console.error(e)
+      setErrorMessage(e instanceof Error ? e.message : 'Report could not be deleted. Please retry.')
     } finally {
       setIsDeleting(false)
     }
@@ -101,7 +88,7 @@ export function MedicalRecordDetailModal({
         value: '',
         unit: '',
         reference_range: '',
-        status: 'NORMAL',
+        status: 'UNKNOWN',
       },
     ])
   }
@@ -120,6 +107,7 @@ export function MedicalRecordDetailModal({
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isSaving || isDeleting) return
     if (!title.trim()) {
       setErrorMessage('Report title cannot be empty.')
       return
@@ -139,10 +127,10 @@ export function MedicalRecordDetailModal({
         hospital_clinic: hospitalClinic.trim() || undefined,
         summary: summary.trim() || undefined,
         biomarkers: biomarkers.filter((b) => b.name?.trim()),
-        ai_analysis: record.ai_analysis,
-        file_url: record.file_url,
-        file_name: record.file_name,
-        file_type: record.file_type,
+        ai_analysis: record.ai_analysis || {},
+        file_url: record.file_url || undefined,
+        file_name: record.file_name || undefined,
+        file_type: record.file_type || undefined,
       })
 
       if (!res.success) {
@@ -152,66 +140,24 @@ export function MedicalRecordDetailModal({
       setIsEditing(false)
       router.refresh()
       onUpdated?.()
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error updating medical record.')
+    } catch (err) {
+      setErrorMessage(err instanceof Error ? err.message : 'Error updating medical record.')
     } finally {
       setIsSaving(false)
     }
   }
 
   const aiAnalysis = record.ai_analysis || {}
+  const recommendations = Array.isArray(aiAnalysis.key_recommendations) ? aiAnalysis.key_recommendations.filter((item): item is string => typeof item === 'string') : []
 
-  const getStatusBadge = (status: string) => {
-    const s = status?.toUpperCase()
-    switch (s) {
-      case 'HIGH':
-      case 'CRITICAL':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-red-600 text-white shadow-xs">
-            <span className="size-1.5 rounded-full bg-white animate-pulse" />
-            {status}
-          </span>
-        )
-      case 'LOW':
-        return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-amber-500 text-white shadow-xs">
-            {status}
-          </span>
-        )
-      case 'NORMAL':
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase bg-emerald-600 text-white shadow-xs">
-            {status}
-          </span>
-        )
-      default:
-        return (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-[#DDFBEF] text-[#2F4858] border border-[#B7EED8]">
-            {status || 'RECORDED'}
-          </span>
-        )
-    }
-  }
+  const getStatusBadge = (status?: string) => <span className={'inline-flex rounded-lg border px-2 py-1 text-sm ' + measurementPresentation(status).className}>{measurementPresentation(status).label}</span>
+
 
   return (
-    <>
-      {trigger ? (
-        <div onClick={() => setOpen(true)} className="inline-flex cursor-pointer">
-          {trigger}
-        </div>
-      ) : (
-        <Button
-          onClick={() => setOpen(true)}
-          variant="outline"
-          size="sm"
-          className="text-[#2F4858] hover:bg-[#DDFBEF]/50 rounded-xl text-xs font-bold cursor-pointer"
-        >
-          View Report & AI Summary
-        </Button>
-      )}
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[96vw] sm:w-[92vw] sm:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto p-4 sm:p-6 md:p-8 bg-white border border-[#2F4858]/15 rounded-2xl sm:rounded-3xl shadow-2xl text-[#2F4858]">
+    <Dialog open={open} onOpenChange={next => { if (!isSaving && !isDeleting) { if (next) resetDraft(); setOpen(next) } }}>
+      <DialogTrigger render={trigger?.type === 'span' ? <button type="button" className="underline text-sm">{trigger}</button> : trigger || <Button variant="outline">View report</Button>} />
+        <DialogContent className="w-[96vw] sm:w-[92vw] sm:max-w-3xl lg:max-w-4xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6 md:p-8 bg-white border border-[#2F4858]/15 rounded-2xl sm:rounded-3xl shadow-2xl text-[#2F4858]">
+        {errorMessage && <p id={formId + '-error'} role="alert" className="rounded-lg bg-rose-50 text-rose-900 p-3">{errorMessage}</p>}
         {/* Header with Title and Mode Toggle */}
         <DialogHeader className="pb-4 border-b border-[#2F4858]/10">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -222,28 +168,28 @@ export function MedicalRecordDetailModal({
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <DialogTitle className="text-base sm:text-lg font-black text-[#2F4858] truncate">
-                    {isEditing ? 'Edit Medical Record' : record.title}
+                    {isEditing ? 'Edit Medical Record' : record.title} · {familyMemberName}
                   </DialogTitle>
                 </div>
                 {!isEditing && (
                   <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                    <Badge variant="outline" className="text-[10px] font-extrabold uppercase tracking-wider bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
+                    <Badge variant="outline" className="text-sm font-extrabold uppercase tracking-wider bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
                       {record.record_type}
                     </Badge>
                     {record.test_date && (
-                      <span className="text-xs font-semibold text-[#2F4858]/70 flex items-center gap-1">
+                      <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                         <Calendar className="size-3" />
                         {new Date(record.test_date).toLocaleDateString()}
                       </span>
                     )}
                     {record.hospital_clinic && (
-                      <span className="text-xs font-semibold text-[#2F4858]/70 flex items-center gap-1">
+                      <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                         <Building className="size-3" />
                         {record.hospital_clinic}
                       </span>
                     )}
                     {record.doctor_name && (
-                      <span className="text-xs font-semibold text-[#2F4858]/70 flex items-center gap-1">
+                      <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                         <User className="size-3" />
                         {record.doctor_name}
                       </span>
@@ -271,18 +217,13 @@ export function MedicalRecordDetailModal({
 
         {/* EDIT MODE */}
         {isEditing ? (
-          <form onSubmit={handleSave} className="space-y-5 pt-2">
-            {errorMessage && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
-                {errorMessage}
-              </div>
-            )}
+          <form aria-describedby={errorMessage ? formId + '-error' : undefined} onSubmit={handleSave} className="space-y-5 pt-2"><fieldset disabled={isSaving} className="contents">
 
             {/* Basic Info Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1 sm:col-span-2">
-                <Label className="text-xs font-bold text-[#2F4858]">Report / Document Title</Label>
-                <Input
+                <Label htmlFor={formId + "-field-1"} className="text-xs font-bold text-[#2F4858]">Report / Document Title</Label>
+                <Input aria-label="Report / Document Title" id={formId + "-field-1"}
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -292,9 +233,9 @@ export function MedicalRecordDetailModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-[#2F4858]">Record Type</Label>
+                <Label htmlFor={formId + "-field-2"} className="text-xs font-bold text-[#2F4858]">Record Type</Label>
                 <Select value={recordType} onValueChange={(val) => setRecordType(val || 'LAB_REPORT')}>
-                  <SelectTrigger className="h-10 rounded-xl border-[#2F4858]/20 text-xs font-semibold">
+                  <SelectTrigger aria-label="Record Type" id={formId + "-field-2"} className="h-10 rounded-xl border-[#2F4858]/20 text-xs font-semibold">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-[#2F4858]/20 bg-[#F8FDFB]">
@@ -309,8 +250,8 @@ export function MedicalRecordDetailModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-[#2F4858]">Test / Consultation Date</Label>
-                <Input
+                <Label htmlFor={formId + "-field-3"} className="text-xs font-bold text-[#2F4858]">Test / Consultation Date</Label>
+                <Input aria-label="Test / Consultation Date" id={formId + "-field-3"}
                   type="date"
                   value={testDate}
                   onChange={(e) => setTestDate(e.target.value)}
@@ -319,8 +260,8 @@ export function MedicalRecordDetailModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-[#2F4858]">Hospital / Lab / Clinic</Label>
-                <Input
+                <Label htmlFor={formId + "-field-4"} className="text-xs font-bold text-[#2F4858]">Hospital / Lab / Clinic</Label>
+                <Input aria-label="Hospital / Lab / Clinic" id={formId + "-field-4"}
                   value={hospitalClinic}
                   onChange={(e) => setHospitalClinic(e.target.value)}
                   placeholder="e.g. Apollo Diagnostics"
@@ -329,8 +270,8 @@ export function MedicalRecordDetailModal({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-[#2F4858]">Consulting Doctor / Pathologist</Label>
-                <Input
+                <Label htmlFor={formId + "-field-5"} className="text-xs font-bold text-[#2F4858]">Consulting Doctor / Pathologist</Label>
+                <Input aria-label="Consulting Doctor / Pathologist" id={formId + "-field-5"}
                   value={doctorName}
                   onChange={(e) => setDoctorName(e.target.value)}
                   placeholder="e.g. Dr. Rajesh Sharma"
@@ -341,10 +282,10 @@ export function MedicalRecordDetailModal({
 
             {/* Diagnosis / Clinical Impression */}
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858]">
+              <Label htmlFor={formId + "-field-6"} className="text-xs font-bold text-[#2F4858]">
                 Clinical Impression & Diagnosis Name
               </Label>
-              <Input
+              <Input aria-label="Clinical Impression & Diagnosis Name" id={formId + "-field-6"}
                 value={diagnosis}
                 onChange={(e) => setDiagnosis(e.target.value)}
                 placeholder="e.g. Type 2 Diabetes Mellitus, Iron Deficiency Anemia"
@@ -354,10 +295,10 @@ export function MedicalRecordDetailModal({
 
             {/* Clinical Summary */}
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-[#2F4858]">
+              <Label htmlFor={formId + "-field-7"} className="text-xs font-bold text-[#2F4858]">
                 Medical Summary / Findings
               </Label>
-              <textarea
+              <textarea aria-label="Medical Summary / Findings" id={formId + "-field-7"}
                 rows={3}
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
@@ -388,7 +329,7 @@ export function MedicalRecordDetailModal({
               {biomarkers.length > 0 ? (
                 <div className="border border-[#2F4858]/15 rounded-2xl overflow-x-auto">
                   <table className="min-w-[520px] w-full text-xs">
-                    <thead className="bg-[#F8FDFB] border-b border-[#2F4858]/10 text-[#2F4858]/70 font-bold uppercase text-[10px]">
+                    <thead className="bg-[#F8FDFB] border-b border-[#2F4858]/10 text-muted-foreground font-bold uppercase text-sm">
                       <tr>
                         <th className="py-2.5 px-3 text-left">Test Name</th>
                         <th className="py-2.5 px-2 text-left w-24">Value</th>
@@ -402,7 +343,7 @@ export function MedicalRecordDetailModal({
                       {biomarkers.map((bm, index) => (
                         <tr key={index} className="bg-white hover:bg-[#F8FDFB]/50">
                           <td className="p-1.5">
-                            <Input
+                            <Input aria-label="name" id={formId + "-field-8" + "-" + index}
                               value={bm.name || ''}
                               onChange={(e) => handleUpdateBiomarker(index, 'name', e.target.value)}
                               placeholder="e.g. HbA1c"
@@ -410,7 +351,7 @@ export function MedicalRecordDetailModal({
                             />
                           </td>
                           <td className="p-1.5">
-                            <Input
+                            <Input aria-label="value" id={formId + "-field-9" + "-" + index}
                               value={bm.value || ''}
                               onChange={(e) => handleUpdateBiomarker(index, 'value', e.target.value)}
                               placeholder="5.8"
@@ -418,7 +359,7 @@ export function MedicalRecordDetailModal({
                             />
                           </td>
                           <td className="p-1.5">
-                            <Input
+                            <Input aria-label="unit" id={formId + "-field-10" + "-" + index}
                               value={bm.unit || ''}
                               onChange={(e) => handleUpdateBiomarker(index, 'unit', e.target.value)}
                               placeholder="%"
@@ -427,13 +368,15 @@ export function MedicalRecordDetailModal({
                           </td>
                           <td className="p-1.5">
                             <Select
-                              value={bm.status || 'NORMAL'}
-                              onValueChange={(val) => handleUpdateBiomarker(index, 'status', val || 'NORMAL')}
+                              value={bm.status || 'UNKNOWN'}
+                              onValueChange={(val) => handleUpdateBiomarker(index, 'status', val || 'UNKNOWN')}
                             >
-                              <SelectTrigger className="h-9 text-xs font-bold rounded-lg border-[#2F4858]/20">
+                              <SelectTrigger id={formId + "-field-11" + "-" + index} aria-label="Recorded measurement status" className="h-9 text-xs font-bold rounded-lg border-[#2F4858]/20">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent className="rounded-xl border-[#2F4858]/20 bg-[#F8FDFB]">
+                                <SelectItem value="UNKNOWN" className="text-sm">Unclassified</SelectItem>
+                                <SelectItem value="ABNORMAL" className="text-sm text-amber-900">ABNORMAL</SelectItem>
                                 <SelectItem value="NORMAL" className="text-xs font-bold text-emerald-700">NORMAL</SelectItem>
                                 <SelectItem value="HIGH" className="text-xs font-bold text-rose-700">HIGH</SelectItem>
                                 <SelectItem value="LOW" className="text-xs font-bold text-amber-700">LOW</SelectItem>
@@ -442,7 +385,7 @@ export function MedicalRecordDetailModal({
                             </Select>
                           </td>
                           <td className="p-1.5">
-                            <Input
+                            <Input aria-label="reference range" id={formId + "-field-12" + "-" + index}
                               value={bm.reference_range || ''}
                               onChange={(e) => handleUpdateBiomarker(index, 'reference_range', e.target.value)}
                               placeholder="e.g. 70 - 99"
@@ -450,7 +393,7 @@ export function MedicalRecordDetailModal({
                             />
                           </td>
                           <td className="p-1.5 text-center">
-                            <Button
+                            <Button aria-label="Remove entry"
                               type="button"
                               variant="ghost"
                               size="icon-xs"
@@ -467,7 +410,7 @@ export function MedicalRecordDetailModal({
                 </div>
               ) : (
                 <div className="p-4 rounded-xl bg-[#F8FDFB] border border-dashed border-[#2F4858]/20 text-center">
-                  <p className="text-xs text-[#2F4858]/60 font-medium">No biomarker parameters added. Click "+ Add Test Parameter" above.</p>
+                  <p className="text-xs text-muted-foreground font-medium">No biomarker parameters added. Click &quot;+ Add Test Parameter&quot; above.</p>
                 </div>
               )}
             </div>
@@ -501,14 +444,14 @@ export function MedicalRecordDetailModal({
                 )}
               </Button>
             </div>
-          </form>
+          </fieldset></form>
         ) : (
           /* VIEW MODE */
           <div className="space-y-5 pt-2">
             {/* Clinical Diagnosis Card */}
             {record.diagnosis && (
               <div className="p-4 rounded-2xl bg-[#F8FDFB] border border-[#2F4858]/15 space-y-1">
-                <span className="text-[10px] font-black uppercase tracking-wider text-[#2F4858]/60">
+                <span className="text-sm font-black uppercase tracking-wider text-muted-foreground">
                   Clinical Impression & Diagnosis
                 </span>
                 <p className="text-sm font-black text-[#2F4858]">{record.diagnosis}</p>
@@ -538,7 +481,7 @@ export function MedicalRecordDetailModal({
 
                 <div className="border border-[#2F4858]/10 rounded-2xl overflow-x-auto shadow-xs">
                   <table className="min-w-[480px] w-full text-left text-xs">
-                    <thead className="bg-[#F8FDFB] border-b border-[#2F4858]/10 text-[#2F4858]/70 font-bold uppercase text-[10px]">
+                    <thead className="bg-[#F8FDFB] border-b border-[#2F4858]/10 text-muted-foreground font-bold uppercase text-sm">
                       <tr>
                         <th className="py-2.5 px-3">Test Parameter</th>
                         <th className="py-2.5 px-3">Measured Result</th>
@@ -547,7 +490,7 @@ export function MedicalRecordDetailModal({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#2F4858]/10 font-semibold">
-                      {biomarkers.map((bm: any, idx: number) => {
+                      {biomarkers.map((bm, idx) => {
                         const isHigh = bm.status === 'HIGH' || bm.status === 'CRITICAL'
                         const isLow = bm.status === 'LOW'
                         return (
@@ -569,10 +512,10 @@ export function MedicalRecordDetailModal({
                               </div>
                             </td>
                             <td className={`py-3 px-3 font-black text-sm ${isHigh ? 'text-red-700 font-black' : isLow ? 'text-amber-700 font-black' : 'text-[#2F4858]'}`}>
-                              {bm.value} <span className="text-[11px] font-medium text-[#2F4858]/70">{bm.unit}</span>
+                              {bm.value} <span className="text-sm font-medium text-muted-foreground">{bm.unit}</span>
                             </td>
                             <td className="py-3 px-3">{getStatusBadge(bm.status)}</td>
-                            <td className="py-3 px-3 text-[#2F4858]/70 text-[11px] font-semibold">{bm.reference_range || '—'}</td>
+                            <td className="py-3 px-3 text-muted-foreground text-sm font-semibold">{bm.reference_range || '—'}</td>
                           </tr>
                         )
                       })}
@@ -583,14 +526,14 @@ export function MedicalRecordDetailModal({
             )}
 
             {/* Key AI Recommendations */}
-            {aiAnalysis?.key_recommendations && aiAnalysis.key_recommendations.length > 0 && (
+            {recommendations.length > 0 && (
               <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 space-y-2">
                 <span className="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
                   <Info className="size-3.5 text-amber-700" />
                   <span>Clinical Recommendations & Follow-Up</span>
                 </span>
                 <ul className="list-disc list-inside space-y-1 text-xs font-semibold text-amber-900">
-                  {aiAnalysis.key_recommendations.map((rec: string, i: number) => (
+                  {recommendations.map((rec, i) => (
                     <li key={i}>{rec}</li>
                   ))}
                 </ul>
@@ -606,13 +549,13 @@ export function MedicalRecordDetailModal({
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-extrabold text-[#2F4858] truncate">{record.file_name || 'Medical Document Report'}</p>
-                    <p className="text-[10px] font-semibold text-[#2F4858]/60 uppercase tracking-wider">{record.file_type || 'Attached Document'}</p>
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{record.file_type || 'Attached Document'}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
                   <a
-                    href={record.file_url}
+                    href={`/api/medical-records/${record.id}/document`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="w-full sm:w-auto justify-center px-3.5 py-2 rounded-xl bg-[#2F4858] hover:bg-[#1E313D] text-[#DDFBEF] text-xs font-bold flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
@@ -626,7 +569,7 @@ export function MedicalRecordDetailModal({
 
             {/* Footer Actions */}
             <div className="pt-4 mt-4 border-t border-[#2F4858]/10 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-              <Button
+              <Button aria-label="Remove entry"
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -653,7 +596,7 @@ export function MedicalRecordDetailModal({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setOpen(false)}
+                  disabled={isSaving} onClick={() => setOpen(false)}
                   className="rounded-xl text-xs font-bold cursor-pointer h-10"
                 >
                   Close
@@ -664,6 +607,5 @@ export function MedicalRecordDetailModal({
         )}
       </DialogContent>
     </Dialog>
-    </>
   )
 }

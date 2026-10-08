@@ -1,0 +1,15 @@
+# Medafora setup and runtime
+
+Run `npm ci`, copy `.env.example` to `.env.local`, fill in the project URL, public anon key and server-only Gemini key, then run `npm run dev`. Use an existing Supabase account. Verify with `npm test`, `npm run typecheck` and `npm run build`.
+
+The live web AI routes use direct Gemini requests. The separate ADK package is experimental and is not the request runtime. GEMINI_MODELS optionally supplies an allowlist; otherwise a supported Flash model is discovered and cached briefly. Each direct call has at most two attempts and a 25-second deadline. GEMINI_REGULATORY_MODEL separately configures a search-capable regulatory model.
+
+The complete base schema is missing from this repository. The user reports that the SQL commands have already been applied to their Supabase project. For another environment, inspect its base schema before applying the migrations under `supabase/migrations`; these files do not bootstrap a fresh database. The ownership/audit migration adds required scanner RPCs, ownership guards, a separate attempt timestamp and a durable scheduler lease. The storage migration makes reports private; remove broad existing storage policies because permissive policies combine with OR.
+
+New report paths use `<owner UUID>/<member UUID>/<random filename>` in the existing file_url column. Open attachments through `/api/medical-records/<record UUID>/document`, which checks ownership and signs a 60-second link. Valid legacy member-folder public URLs remain resolvable; old undefined-folder uploads need a path/data migration. Failed cleanup attempts need follow-up.
+
+Deploy Edge Functions from this repository root, where `supabase/config.toml` and `src/lib/server/regulatory.ts` are available together. Configure GEMINI_API_KEY, GEMINI_REGULATORY_MODEL, optional GEMINI_MODEL and the scanner's separate SAFETY_SCAN_SECRET. The scanner verifies that Bearer secret before service-role access. User AI functions validate user tokens inside their handlers. Scheduling and notification delivery remain unimplemented. Edge Functions run in Deno and are excluded from the web TypeScript/lint configuration; the offline Node regression suite exercises their authorization and scanner-lock behavior.
+
+Unknown or unavailable checks never clear established bans or refresh successful-check dates. Grounded regulatory output is a warning for review, not an authoritative ban or clearance. Health summaries are user-initiated, contain dated owned records, and calculate no wellness score. Inventory does not establish current treatment, and literal allergy matching cannot establish compatibility. Unsupported diagnostic reference bounds and unclassified vital types remain unknown.
+
+Request burst limits are process-local; distributed quotas are still needed. Clinical thresholds need independent review. Account recovery/provisioning, the active-treatment model and complete mobile workflows remain outstanding. The web application passes 57 regressions, TypeScript, production build and lint. See [frontend fix notes](docs/frontend-fixes.md) for details and the remaining browser/live-service verification checklist.

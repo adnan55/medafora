@@ -1,48 +1,33 @@
 'use client'
 
-import { useState } from 'react'
+
 import Link from 'next/link'
-import {
-  FileText,
-  Activity,
-  Pill,
-  ShieldAlert,
-  Calendar,
-  User,
-  Plus,
-  ArrowLeft,
-  Sparkles,
-  ExternalLink,
-  CheckCircle2,
-  AlertTriangle,
-  Building,
-  HeartPulse,
-  Stethoscope,
-  Info,
-  Clock,
-  Sun,
-} from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { AnimatedTabs, type AnimatedTabItem } from '@/components/shadcn-space/tabs/tabs-08'
-import { AddMedicalRecordModal } from '@/components/AddMedicalRecordModal'
-import { MedicalRecordDetailModal } from '@/components/MedicalRecordDetailModal'
-import { MedicineDetailsDrawer } from '@/components/MedicineDetailsDrawer'
-import { LogVitalModal } from '@/components/LogVitalModal'
-import { BiomarkerTrendChart } from '@/components/BiomarkerTrendChart'
-import { AIHealthSummaryCard } from '@/components/AIHealthSummaryCard'
-import { EditFamilyMemberModal } from '@/components/EditFamilyMemberModal'
-import { EmergencyCardModal } from '@/components/EmergencyCardModal'
-import { calculateExpiryStatus } from '@/lib/utils/expiryCalculator'
-import { calculateAge, checkAgeSpecificMedicineAlerts } from '@/lib/utils/ageCalculator'
+import { FileText, Activity, Pill, ShieldAlert, Plus, Sparkles, ExternalLink, HeartPulse, Stethoscope, Info } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { AnimatedTabs, type AnimatedTabItem } from '@/components/shadcn-space/tabs/tabs-08';
+import { AddMedicalRecordModal } from '@/components/AddMedicalRecordModal';
+import { MedicalRecordDetailModal } from '@/components/MedicalRecordDetailModal';
+import { MedicineSummary } from '@/components/MedicineSummary';
+
+import { LogVitalModal } from '@/components/LogVitalModal';
+import { BiomarkerTrendChart } from '@/components/BiomarkerTrendChart';
+import { AIHealthSummaryCard } from '@/components/AIHealthSummaryCard';
+import { EditFamilyMemberModal } from '@/components/EditFamilyMemberModal';
+import { EmergencyCardModal } from '@/components/EmergencyCardModal';
+import { measurementPresentation } from '@/lib/utils/statusPresentation';
+
+import { calculateAge } from '@/lib/utils/ageCalculator';
+import type { MemberRecord, MedicineRecord, ReportRecord, VitalRecord } from '@/lib/types/records';
 
 interface FamilyMemberHealthHubProps {
-  member: any
-  medicalRecords: any[]
-  vitalLogs: any[]
-  medicines: any[]
+  member: MemberRecord
+  medicalRecords: ReportRecord[]
+  vitalLogs: VitalRecord[]
+  medicines: MedicineRecord[]
+  inventoryIncomplete?: boolean
 }
 
 export function FamilyMemberHealthHub({
@@ -50,6 +35,7 @@ export function FamilyMemberHealthHub({
   medicalRecords,
   vitalLogs,
   medicines,
+  inventoryIncomplete = false,
 }: FamilyMemberHealthHubProps) {
   const records = medicalRecords || []
   const vitals = vitalLogs || []
@@ -64,7 +50,7 @@ export function FamilyMemberHealthHub({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-[#2F4858]/15 shadow-xs">
         <div>
           <h3 className="font-extrabold text-sm text-[#2F4858]">Diagnostic Lab Reports & Scans</h3>
-          <p className="text-xs font-medium text-[#2F4858]/70">
+          <p className="text-xs font-medium text-muted-foreground">
             Pathology blood panels, imaging, and AI-extracted biomarkers ({labReports.length} uploaded)
           </p>
         </div>
@@ -81,7 +67,7 @@ export function FamilyMemberHealthHub({
               <FileText className="size-6 opacity-70" />
             </div>
             <h4 className="font-bold text-sm text-[#2F4858]">No diagnostic reports uploaded yet</h4>
-            <p className="text-xs text-[#2F4858]/70 max-w-sm mx-auto mt-1 mb-4 font-medium">
+            <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1 mb-4 font-medium">
               Upload blood tests, lipid panels, urine tests, or radiology scans in PDF or image format to get instant AI biomarker extraction.
             </p>
             <AddMedicalRecordModal
@@ -94,7 +80,7 @@ export function FamilyMemberHealthHub({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {labReports.map((record) => {
             const biomarkers = Array.isArray(record.biomarkers) ? record.biomarkers : []
-            const abnormalCount = biomarkers.filter((b: any) => b.status === 'HIGH' || b.status === 'CRITICAL' || b.status === 'LOW').length
+            const abnormalCount = biomarkers.filter(b => ['HIGH', 'LOW', 'ABNORMAL', 'CRITICAL'].includes(b.status || '')).length
 
             return (
               <Card key={record.id} className="bg-white border-[#2F4858]/15 rounded-2xl shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden">
@@ -107,13 +93,13 @@ export function FamilyMemberHealthHub({
                       <CardTitle className="text-sm font-extrabold text-[#2F4858] truncate">
                         {record.title}
                       </CardTitle>
-                      <CardDescription className="text-[11px] font-semibold text-[#2F4858]/70 flex items-center gap-1.5 mt-0.5">
+                      <CardDescription className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5 mt-0.5">
                         {record.test_date && <span>{new Date(record.test_date).toLocaleDateString()}</span>}
                         {record.hospital_clinic && <span>• {record.hospital_clinic}</span>}
                       </CardDescription>
                     </div>
                   </div>
-                  <Badge variant="outline" className="text-[10px] font-bold bg-white text-[#2F4858] border-[#2F4858]/20 shrink-0">
+                  <Badge variant="outline" className="text-sm font-bold bg-white text-[#2F4858] border-[#2F4858]/20 shrink-0">
                     {record.record_type}
                   </Badge>
                 </CardHeader>
@@ -121,38 +107,32 @@ export function FamilyMemberHealthHub({
                 <CardContent className="p-4 space-y-3 text-xs">
                   {record.diagnosis && (
                     <div className="p-2.5 rounded-xl bg-[#DDFBEF]/40 border border-[#B7EED8]">
-                      <span className="font-extrabold text-[10px] uppercase text-[#2F4858]/70 block">Diagnosis:</span>
+                      <span className="font-extrabold text-sm uppercase text-muted-foreground block">Diagnosis:</span>
                       <span className="font-bold text-[#2F4858]">{record.diagnosis}</span>
                     </div>
                   )}
 
                   {biomarkers.length > 0 && (
                     <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-[#2F4858]">
+                      <div className="flex items-center justify-between text-sm font-bold text-[#2F4858]">
                         <span>Key Biomarkers ({biomarkers.length})</span>
                         {abnormalCount > 0 && (
-                          <Badge variant="destructive" className="text-[9px] font-bold px-1.5 py-0">
+                          <Badge variant="destructive" className="text-sm font-bold px-1.5 py-0">
                             {abnormalCount} Attention Required
                           </Badge>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1.5">
-                        {biomarkers.slice(0, 4).map((bm: any, idx: number) => (
+                        {biomarkers.slice(0, 4).map((bm, idx) => (
                           <span
                             key={idx}
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
-                              bm.status === 'HIGH' || bm.status === 'CRITICAL'
-                                ? 'bg-red-100 text-red-800 border-red-300 font-black'
-                                : bm.status === 'LOW'
-                                ? 'bg-amber-100 text-amber-800 border-amber-300 font-black'
-                                : 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold'
-                            }`}
+                            className={'px-2 py-1 rounded-md text-sm font-bold border ' + measurementPresentation(bm.status).className}
                           >
-                            {bm.name}: {bm.value} {bm.unit}
+                            {bm.name}: {bm.value} {bm.unit} · {measurementPresentation(bm.status).label}
                           </span>
                         ))}
                         {biomarkers.length > 4 && (
-                          <span className="text-[10px] font-bold text-[#2F4858]/60 self-center">
+                          <span className="text-sm font-bold text-muted-foreground self-center">
                             +{biomarkers.length - 4} more
                           </span>
                         )}
@@ -168,7 +148,7 @@ export function FamilyMemberHealthHub({
                   />
                   {record.file_url && (
                     <a
-                      href={record.file_url}
+                      href={`/api/medical-records/${record.id}/document`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs font-bold text-[#2F4858] hover:underline flex items-center gap-1"
@@ -196,7 +176,7 @@ export function FamilyMemberHealthHub({
             <HeartPulse className="size-4.5 text-[#2F4858]" />
             <span>Recorded Chronic Conditions & Health History</span>
           </div>
-          <Badge variant="outline" className="text-[10px] font-bold bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
+          <Badge variant="outline" className="text-sm font-bold bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
             Profile Baseline
           </Badge>
         </div>
@@ -214,7 +194,7 @@ export function FamilyMemberHealthHub({
             ))}
           </div>
         ) : (
-          <p className="text-xs text-[#2F4858]/70 font-medium">No chronic conditions recorded in profile baseline.</p>
+          <p className="text-xs text-muted-foreground font-medium">No chronic conditions recorded in profile baseline.</p>
         )}
       </Card>
 
@@ -231,9 +211,9 @@ export function FamilyMemberHealthHub({
         {clinicalDiagnoses.length === 0 ? (
           <Card className="text-center py-10 bg-white rounded-2xl border-dashed border-[#2F4858]/30">
             <CardContent className="flex flex-col items-center">
-              <Stethoscope className="size-8 text-[#2F4858]/50 mb-2" />
+              <Stethoscope className="size-8 text-muted-foreground mb-2" />
               <p className="text-xs font-bold text-[#2F4858]">No diagnostic history entries recorded</p>
-              <p className="text-[11px] text-[#2F4858]/60 mt-0.5">
+              <p className="text-sm text-muted-foreground mt-0.5">
                 Log doctor consultations, hospital summaries, or clinical conclusions.
               </p>
             </CardContent>
@@ -245,7 +225,7 @@ export function FamilyMemberHealthHub({
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="font-extrabold text-sm text-[#2F4858]">{rec.title}</span>
-                    <Badge variant="outline" className="text-[10px] font-bold bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
+                    <Badge variant="outline" className="text-sm font-bold bg-[#DDFBEF] text-[#2F4858] border-[#B7EED8]">
                       {rec.record_type}
                     </Badge>
                   </div>
@@ -259,7 +239,7 @@ export function FamilyMemberHealthHub({
                       {rec.summary}
                     </p>
                   )}
-                  <div className="text-[11px] font-semibold text-[#2F4858]/60 flex items-center gap-2 pt-1">
+                  <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2 pt-1">
                     {rec.test_date && <span>Date: {new Date(rec.test_date).toLocaleDateString()}</span>}
                     {rec.doctor_name && <span>• Dr: {rec.doctor_name}</span>}
                     {rec.hospital_clinic && <span>• {rec.hospital_clinic}</span>}
@@ -286,7 +266,7 @@ export function FamilyMemberHealthHub({
       <div className="flex items-center justify-between bg-white p-4 rounded-2xl border border-[#2F4858]/15 shadow-xs">
         <div>
           <h3 className="font-extrabold text-sm text-[#2F4858]">Cabinet Medicines Assigned to {member.full_name.split(' ')[0]}</h3>
-          <p className="text-xs font-medium text-[#2F4858]/70">
+          <p className="text-xs font-medium text-muted-foreground">
             {medicines.length} medicines currently linked
           </p>
         </div>
@@ -299,9 +279,9 @@ export function FamilyMemberHealthHub({
       {medicines.length === 0 ? (
         <Card className="text-center py-12 bg-white rounded-2xl border-dashed border-[#2F4858]/30">
           <CardContent className="flex flex-col items-center">
-            <Pill className="size-8 text-[#2F4858]/50 mb-2" />
+            <Pill className="size-8 text-muted-foreground mb-2" />
             <p className="text-xs font-bold text-[#2F4858]">No medicines assigned to this member</p>
-            <p className="text-[11px] text-[#2F4858]/60 mt-0.5 mb-4">
+            <p className="text-sm text-muted-foreground mt-0.5 mb-4">
               Add medications to your cabinet and assign them to {member.full_name}.
             </p>
             <Button render={<Link href="/medicines/new" />} size="sm" className="bg-[#2F4858] text-[#DDFBEF] rounded-xl text-xs font-bold">
@@ -311,76 +291,7 @@ export function FamilyMemberHealthHub({
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {medicines.map((med) => {
-            const status = calculateExpiryStatus(med.expiry_date);
-            let statusColor = 'text-emerald-700 bg-emerald-100 border-emerald-200';
-            let dotColor = 'bg-emerald-600';
-
-            if (status.urgency === 'EXPIRED' || status.urgency === 'CRITICAL') {
-              statusColor = 'text-rose-700 bg-rose-100 border-rose-200';
-              dotColor = 'bg-rose-600';
-            } else if (status.urgency === 'WARNING') {
-              statusColor = 'text-amber-700 bg-amber-100 border-amber-200';
-              dotColor = 'bg-amber-600';
-            }
-
-            const ageAlert = checkAgeSpecificMedicineAlerts(med.medicine_name, med.salt_composition, ageInfo);
-
-            return (
-              <Card key={med.id} className="bg-white border-[#2F4858]/15 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="size-8 rounded-xl bg-[#2F4858] text-[#DDFBEF] flex items-center justify-center">
-                        <Pill className="size-4" />
-                      </div>
-                      <span className="font-extrabold text-sm text-[#2F4858]">{med.medicine_name}</span>
-                    </div>
-                    {med.is_daily_routine && (
-                      <Badge variant="outline" className="text-[10px] font-bold bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1">
-                        <Sun className="size-2.5" /> Daily
-                      </Badge>
-                    )}
-                  </div>
-
-                  <p className="text-xs font-bold text-[#2F4858]/80 bg-[#DDFBEF]/30 p-2 rounded-xl border border-[#B7EED8]">
-                    {med.salt_composition}
-                  </p>
-
-                  {/* Age Specific Alert if applicable */}
-                  {ageAlert.hasWarning && (
-                    <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[11px] font-bold leading-relaxed">
-                      {ageAlert.message}
-                    </div>
-                  )}
-
-                  {/* Expiry Banner */}
-                  <div className={`flex items-center justify-between p-2 px-2.5 rounded-xl border text-xs font-bold ${statusColor}`}>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-                      <span className="font-black text-xs">{status.label}</span>
-                    </div>
-                    <div className="flex items-center gap-1 font-bold tabular-nums text-xs">
-                      <Clock className="size-3.5 opacity-80" />
-                      <span>Exp: {new Date(med.expiry_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[11px] font-semibold text-[#2F4858]/70">
-                    <span>Qty: {med.quantity} {med.unit}</span>
-                    <span>• Spot: {med.storage_location}</span>
-                  </div>
-                </div>
-
-                <div className="pt-3 mt-3 border-t border-[#2F4858]/10 flex items-center justify-between">
-                  <MedicineDetailsDrawer medicine={med} />
-                  <Link href={`/medicines/${med.id}`} className="text-xs font-bold text-[#2F4858] hover:underline">
-                    Full Details →
-                  </Link>
-                </div>
-              </Card>
-            )
-          })}
+          {medicines.map(med => <MedicineSummary key={med.id} medicine={med} />)}
         </div>
       )}
     </div>
@@ -409,7 +320,7 @@ export function FamilyMemberHealthHub({
   const tabs: AnimatedTabItem[] = [
     {
       value: 'ai-insights',
-      label: 'AI Health Guardian',
+      label: 'AI record review',
       icon: Sparkles,
       badge: 'AI',
       content: AISummaryTab,
@@ -470,19 +381,19 @@ export function FamilyMemberHealthHub({
                   <EditFamilyMemberModal
                     member={member}
                     trigger={
-                      <button className="text-[11px] font-bold text-[#2F4858]/70 hover:text-[#2F4858] underline cursor-pointer">
-                        + Set Birthdate for Age AI
+                      <button className="text-sm font-bold text-muted-foreground hover:text-[#2F4858] underline cursor-pointer">
+                        + Add birthdate
                       </button>
                     }
                   />
                 )}
               </div>
-              <p className="text-xs font-semibold text-[#2F4858]/70">
-                Patient & Medical Records Guardian Profile
+              <p className="text-xs font-semibold text-muted-foreground">
+                Dated records and household cabinet
               </p>
               {member.notes && (
                 <p className="text-xs font-medium text-[#2F4858]/80 italic pt-0.5 max-w-md">
-                  "{member.notes}"
+                  &quot;{member.notes}&quot;
                 </p>
               )}
             </div>
@@ -495,7 +406,7 @@ export function FamilyMemberHealthHub({
                 familyMemberId={member.id}
                 familyMemberName={member.full_name}
               />
-              <EmergencyCardModal member={member} medicines={medicines} />
+              {inventoryIncomplete ? <p role="status" className="text-sm text-amber-950">The cabinet list is incomplete; retry before creating an emergency card.</p> : <EmergencyCardModal member={member} medicines={medicines} />}
               <EditFamilyMemberModal member={member} />
             </div>
 
@@ -504,14 +415,14 @@ export function FamilyMemberHealthHub({
                 <div className="p-2.5 px-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-center justify-center sm:justify-start gap-2 text-xs font-bold shadow-xs">
                   <ShieldAlert className="size-4 text-rose-600 shrink-0" />
                   <div className="text-left">
-                    <span className="block font-black text-[10px] uppercase tracking-wider text-rose-700">Allergies:</span>
+                    <span className="block font-black text-sm uppercase tracking-wider text-rose-700">Allergies:</span>
                     <span>{member.allergies.join(', ')}</span>
                   </div>
                 </div>
               ) : (
-                <div className="p-2.5 px-3 rounded-2xl bg-[#DDFBEF]/50 border border-[#B7EED8] text-[#2F4858] flex items-center justify-center gap-2 text-xs font-bold">
-                  <CheckCircle2 className="size-4 text-emerald-600 shrink-0" />
-                  <span>No Drug Allergies</span>
+                <div className="p-2.5 px-3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 flex items-center justify-center gap-2 text-xs font-bold">
+                  <Info className="size-4 shrink-0" />
+                  <span>Allergy history not assessed</span>
                 </div>
               )}
             </div>
@@ -520,7 +431,7 @@ export function FamilyMemberHealthHub({
       </Card>
 
       {/* Animated Tabs Content */}
-      <AnimatedTabs tabs={tabs} defaultValue="ai-insights" />
+      <AnimatedTabs tabs={tabs} defaultValue="reports" />
     </div>
   )
 }

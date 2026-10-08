@@ -1,4 +1,4 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Medafora manages family medicine inventory, profiles, reports and vitals with Next.js and Supabase. Read [SETUP.md](SETUP.md) for the actual runtime, configuration, validation commands and required database/storage migrations. The starter instructions below do not describe the full application setup.
 
 ## Getting Started
 

@@ -4,7 +4,7 @@ import "./globals.css";
 
 const googleSans = localFont({
   src: "../../public/fonts/GoogleSans-Variable.ttf",
-  variable: "--font-sans",
+  variable: "--font-google-sans",
   weight: "300 800",
   style: "normal",
   display: "swap",
@@ -17,13 +17,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Medfora - Family Medicine & Health Guardian",
+  title: "Medafora - Family Medicine & Health Guardian",
   description: "Family Medicine, Safety & AI Health Hub Guardian",
-  applicationName: "Medfora",
+  applicationName: "Medafora",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Medfora",
+    title: "Medafora",
   },
   icons: {
     icon: [
@@ -44,15 +44,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${googleSans.variable} h-full antialiased`}>
-      <head>
-        <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-        <style dangerouslySetInnerHTML={{ __html: `
-          .material-symbols-outlined {
-            font-variation-settings: 'FILL' 1;
-          }
-        `}} />
-      </head>
       <body suppressHydrationWarning className="min-h-full flex flex-col font-sans bg-[#F8FDFB] text-[#2F4858]">
+        <a href="#main-content" className="skip-link">Skip to main content</a>
         <TooltipProvider>
           {children}
         </TooltipProvider>

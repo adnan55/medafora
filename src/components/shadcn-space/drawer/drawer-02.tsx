@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from 'next/image';
 import confetti from "canvas-confetti";
 import {
   MinusIcon,
@@ -92,7 +93,7 @@ const suggestions = [
 
 const ShoppingCartDrawerDemo = () => {
   const [items, setItems] = useState(initialCartItems);
-  const [hasFiredConfetti, setHasFiredConfetti] = useState(false);
+  const hasFiredConfetti = useRef(false);
   const progressSectionRef = useRef<HTMLDivElement>(null);
 
   const updateQty = (id: string, delta: number) => {
@@ -146,7 +147,7 @@ const ShoppingCartDrawerDemo = () => {
 
   useEffect(() => {
     if (subtotal >= FREE_SHIPPING_THRESHOLD && subtotal > 0) {
-      if (!hasFiredConfetti) {
+      if (!hasFiredConfetti.current) {
         if (progressSectionRef.current) {
           const rect = progressSectionRef.current.getBoundingClientRect();
           const x = (rect.left + rect.width / 2) / window.innerWidth;
@@ -157,12 +158,12 @@ const ShoppingCartDrawerDemo = () => {
             origin: { x, y },
           });
         }
-        setHasFiredConfetti(true);
+        hasFiredConfetti.current = true;
       }
     } else {
-      setHasFiredConfetti(false);
+      hasFiredConfetti.current = false;
     }
-  }, [subtotal, hasFiredConfetti]);
+  }, [subtotal]);
 
   return (
     <Drawer swipeDirection="right">
@@ -213,7 +214,7 @@ const ShoppingCartDrawerDemo = () => {
                 <div key={item.id} className="flex flex-col gap-6">
                   <div className="flex items-start gap-4">
                     <div className="size-20 shrink-0 overflow-hidden rounded-lg bg-muted">
-                      <img
+                      <Image width={80} height={80} unoptimized
                         src={item.image}
                         alt={item.name}
                         className="size-full object-cover"
@@ -284,7 +285,7 @@ const ShoppingCartDrawerDemo = () => {
                       className="w-52.75 shrink-0 overflow-hidden rounded-2xl border"
                     >
                       <div className="relative h-42.5 w-full border-b bg-muted">
-                        <img
+                        <Image fill unoptimized sizes="211px"
                           src={suggestion.image}
                           alt={suggestion.name}
                           className="size-full object-cover"

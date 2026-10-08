@@ -1,13 +1,17 @@
+import { authenticatedAI, readJSON, RequestError, errorResponse } from '@/lib/server/requestGuard'
+import { scanSchema, medicineOutput } from '@/lib/validation/requests'
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { generateGeminiContent } from '@/lib/utils/geminiClient'
+import { generateGeminiContent, type GeminiPart } from '@/lib/utils/geminiClient'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json()
+    const { supabase } = await authenticatedAI()
+    const parsedBody = scanSchema.safeParse(await readJSON(req))
+    if (!parsedBody.success) throw new RequestError('Invalid document, images or notes')
+    const body = parsedBody.data
     const { images = [], notes = '' } = body
 
     if (!Array.isArray(images) || images.length === 0) {
@@ -22,19 +26,18 @@ export async function POST(req: Request) {
     const geminiKey =
       process.env.GEMINI_API_KEY ||
       process.env.GOOGLE_API_KEY ||
-      process.env.GOOGLE_GENERATIVE_AI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY
 
     let lastError = ''
 
     // 1. Direct Gemini Call with Dynamic Model Discovery
-    if (geminiKey && images.length > 0) {
+    if (geminiKey) {
       try {
-        const parts: any[] = [
+        const parts: GeminiPart[] = [
           {
             text: `You are an expert pharmaceutical vision OCR and clinical AI assistant.
 Analyze the uploaded photo(s) of medicine packaging, blister strips (front/back), bottle label, box flaps, or prescription.
-Extract all visible and clinically inferred details into a structured JSON response:
+Extract visible details; leave unreadable dates, strengths and doses null. Do not invent prescription instructions. Extract the remaining details into a structured JSON response:
 
 Schema:
 - medicine_name: Exact brand name on the pack (e.g. "Augmentin 625 Duo", "Calpol 650", "Allegra 120mg", "Pan-D", "Azithral 500")
@@ -65,7 +68,7 @@ Return ONLY strictly valid JSON.`,
           parts.push({ text: `Additional notes from user: ${notes}` })
         }
 
-        images.forEach((img: any) => {
+        images.forEach((img) => {
           if (img.fileBase64) {
             const rawData = String(img.fileBase64).replace(/^data:[^;]+;base64,/, '')
             if (rawData.trim()) {
@@ -80,11 +83,11 @@ Return ONLY strictly valid JSON.`,
         })
 
         const parsedResult = await generateGeminiContent(parts, geminiKey)
-        if (parsedResult) {
+        if (medicineOutput.safeParse(parsedResult).success) {
           return NextResponse.json({ success: true, data: parsedResult })
         }
-      } catch (geminiErr: any) {
-        lastError = geminiErr.message
+      } catch (geminiErr) {
+        lastError = geminiErr instanceof Error ? geminiErr.message : "AI scan unavailable"
         console.warn('Direct Gemini Vision API warning:', geminiErr)
       }
     } else if (!geminiKey) {
@@ -93,13 +96,12 @@ Return ONLY strictly valid JSON.`,
 
     // 2. Try Supabase Edge Function fallback
     try {
-      const supabase = await createClient()
       const { data: edgeData, error: edgeError } = await supabase.functions.invoke(
         'analyze-medical-report',
         {
           body: {
             task: 'MEDICINE_MULTI_IMAGE_SCAN',
-            images: images.map((img: any) => ({
+            images: images.map((img) => ({
               fileBase64: String(img.fileBase64).replace(/^data:[^;]+;base64,/, ''),
               mimeType: img.mimeType || 'image/jpeg',
               label: img.label || 'Medicine packaging',
@@ -109,7 +111,7 @@ Return ONLY strictly valid JSON.`,
         }
       )
 
-      if (!edgeError && edgeData?.success && edgeData?.data) {
+      if (!edgeError && edgeData?.success && medicineOutput.safeParse(edgeData.data).success) {
         return NextResponse.json({ success: true, data: edgeData.data })
       }
     } catch (edgeErr) {
@@ -123,11 +125,9 @@ Return ONLY strictly valid JSON.`,
       },
       { status: 500 }
     )
-  } catch (error: any) {
+  } catch (error) {
     console.error('Scan Medicine Route Error:', error)
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to scan medicine photos' },
-      { status: 500 }
-    )
+    const failure = errorResponse(error)
+    return NextResponse.json({ success: false, error: failure.message }, { status: failure.status })
   }
 }

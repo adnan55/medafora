@@ -1,37 +1,19 @@
 'use client'
 
-import { useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import {
-  X,
-  Sparkles,
-  Pill,
-  Save,
-  Camera,
-  UploadCloud,
-  Image as ImageIcon,
-  CheckCircle2,
-  AlertTriangle,
-  Loader2,
-  Calendar,
-  Building,
-  ShieldAlert,
-  Info,
-  Clock,
-  Layers,
-  FileCheck,
-  Plus,
-} from 'lucide-react'
+import { useState, useRef, useEffect, useId } from 'react';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image'
+import { X, Sparkles, Pill, Save, Camera, UploadCloud, CheckCircle2, AlertTriangle, Loader2, ShieldAlert, Plus } from 'lucide-react';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { calculateAge, checkAgeSpecificMedicineAlerts } from '@/lib/utils/ageCalculator'
-import { compressImageForVision } from '@/lib/utils/imageCompressor'
+import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { calculateAge, checkAgeSpecificMedicineAlerts } from '@/lib/utils/ageCalculator';
+import { compressImageForVision } from '@/lib/utils/imageCompressor';
 
 const STORAGE_OPTIONS = [
   'Bedroom Cabinet',
@@ -112,6 +94,7 @@ export function AIEnrichmentForm({
   familyMembers: FamilyMember[]
   initialData?: MedicineData
 }) {
+  const formId = useId()
   const router = useRouter()
 
   // Input Mode: 'SCAN' | 'MANUAL'
@@ -121,7 +104,7 @@ export function AIEnrichmentForm({
 
   // Multi-Image Upload State
   const [uploadedImages, setUploadedImages] = useState<UploadedImageItem[]>([])
-  const [scanNotes, setScanNotes] = useState('')
+  const scanNotes = ''
   const [isAiScanning, setIsAiScanning] = useState(false)
   const [scanSuccessSummary, setScanSuccessSummary] = useState<string | null>(null)
   const [scanError, setScanError] = useState<string | null>(null)
@@ -132,7 +115,7 @@ export function AIEnrichmentForm({
   const [saltComposition, setSaltComposition] = useState(initialData?.salt_composition || '')
   const [dosageForm, setDosageForm] = useState(initialData?.dosage_form || 'TABLET')
   const [strength, setStrength] = useState(initialData?.strength || '')
-  const [quantity, setQuantity] = useState(initialData?.quantity || 10)
+  const [quantity, setQuantity] = useState(initialData?.quantity ?? 10)
   const [unit, setUnit] = useState(initialData?.unit || 'TABLETS')
   const [expiryDate, setExpiryDate] = useState(
     initialData?.expiry_date ? initialData.expiry_date.split('T')[0] : ''
@@ -165,6 +148,8 @@ export function AIEnrichmentForm({
   const [saveError, setSaveError] = useState('')
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const previewUrls = useRef(new Set<string>())
+  useEffect(() => { const urls = previewUrls.current; return () => { urls.forEach(url => URL.revokeObjectURL(url)); urls.clear() } }, [])
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
   // Selected Member Details for Safety Verification
@@ -181,12 +166,14 @@ export function AIEnrichmentForm({
         return `🚨 ALLERGY WARNING: Contains "${allergy}" which conflicts with ${selectedMember.full_name}'s allergy profile!`
       }
     }
-    return null
+    return selectedMember.allergies.length ? 'Recorded allergies require ingredient/class review by a pharmacist; absence of a text match does not establish compatibility.' : null
   })()
 
   // Handle Multi-Image Selection
   const handleAddFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return
+    if (!files || files.length === 0 || isAiScanning || isSaving || isCheckingSafety || isAiLoading) return
+    if (previewUrls.current.size + files.length > 4) { setScanError('Choose at most four photos. Remove an existing photo first.'); return }
+    if (Array.from(files).some(file => !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10_000_000)) { setScanError('Use JPG, PNG or WEBP photos up to 10 MB each.'); return }
 
     const fileArray = Array.from(files)
     const newItems: UploadedImageItem[] = []
@@ -207,10 +194,12 @@ export function AIEnrichmentForm({
             ? 'Back (Expiry & Batch)'
             : `Photo ${totalCount}`
 
+        const preview = URL.createObjectURL(file)
+        previewUrls.current.add(preview)
         newItems.push({
           id: Math.random().toString(36).substring(2, 9),
           file,
-          preview: URL.createObjectURL(file),
+          preview,
           label: defaultLabel,
         })
       }
@@ -222,11 +211,15 @@ export function AIEnrichmentForm({
   }
 
   const handleRemoveImage = (id: string) => {
+    if (isAiScanning || isSaving || isCheckingSafety || isAiLoading) return
+    const image = uploadedImages.find(item => item.id === id)
+    if (image) { URL.revokeObjectURL(image.preview); previewUrls.current.delete(image.preview) }
     setUploadedImages((prev) => prev.filter((img) => img.id !== id))
   }
 
   // Multi-Image AI Vision Scan Handler
   const handleScanMedicinePhotos = async () => {
+    if (isSaving || isCheckingSafety || isAiScanning || isAiLoading) return
     if (uploadedImages.length === 0) {
       setScanError('Please upload or capture at least 1 photo of the medicine.')
       return
@@ -259,10 +252,10 @@ export function AIEnrichmentForm({
       })
 
       const rawText = await res.text()
-      let json: any = null
+      let json: { success?: boolean; data?: MedicineData; error?: string } | null = null
       try {
         json = JSON.parse(rawText)
-      } catch (parseErr) {
+      } catch {
         if (res.status === 413 || rawText.includes('Request Entity Too Large') || rawText.includes('Payload Too Large')) {
           throw new Error('Selected photos are too large. Please select fewer or lower-resolution photos.')
         }
@@ -298,11 +291,11 @@ export function AIEnrichmentForm({
           }${d.brand_or_manufacturer ? ` • By ${d.brand_or_manufacturer}` : ''}`
         )
       } else {
-        setScanError(json.error || 'Failed to analyze medicine photos.')
+        setScanError(json?.error || 'Failed to analyze medicine photos.')
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error('Scan error:', err)
-      setScanError(err.message || 'Failed to connect to AI vision scanner.')
+      setScanError(err instanceof Error ? err.message : 'Failed to connect to AI vision scanner.')
     } finally {
       setIsAiScanning(false)
     }
@@ -310,6 +303,7 @@ export function AIEnrichmentForm({
 
   // Single Text AI Auto-Fill from Medicine Name
   const handleAiAutoFill = async () => {
+    if (isSaving || isCheckingSafety || isAiScanning || isAiLoading) return
     if (!medicineName.trim()) {
       setAiError('Please enter a medicine name first.')
       return
@@ -335,7 +329,7 @@ export function AIEnrichmentForm({
       } else {
         setAiError(error || 'Failed to auto-fill details.')
       }
-    } catch (e) {
+    } catch {
       setAiError('Failed to connect to AI service.')
     } finally {
       setIsAiLoading(false)
@@ -344,54 +338,13 @@ export function AIEnrichmentForm({
 
   const [isCheckingSafety, setIsCheckingSafety] = useState(false)
   const [interactionWarning, setInteractionWarning] = useState('')
-  const [overrideInteraction, setOverrideInteraction] = useState(false)
+  const pendingPayload = useRef<Record<string, unknown> | null>(null)
 
   // Form Submit Handler
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault()
-    
-    // Safety Check for Interactions (only if family member selected, salt exists, and not overridden)
-    if (familyMemberId && saltComposition && !overrideInteraction && !initialData?.id) {
-      setIsCheckingSafety(true)
-      setSaveError('')
-      try {
-        const checkRes = await fetch('/api/ai/check-interactions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            family_member_id: familyMemberId,
-            new_medicine_salt: saltComposition,
-            new_medicine_name: medicineName
-          })
-        })
-        if (checkRes.ok) {
-          const checkData = await checkRes.json()
-          if (checkData.hasInteraction && checkData.warning) {
-            setInteractionWarning(checkData.warning)
-            setIsCheckingSafety(false)
-            return // Stop save, wait for user to confirm
-          }
-        }
-      } catch (err) {
-        console.error('Interaction check failed', err)
-        // fail open, continue to save
-      } finally {
-        setIsCheckingSafety(false)
-      }
-    }
-
-    setIsSaving(true)
-    setSaveError('')
-
-    try {
-      const isEdit = !!initialData?.id
-      const endpoint = isEdit ? `/api/medicines/${initialData.id}` : '/api/medicines'
-      const method = isEdit ? 'PUT' : 'POST'
-
-      const res = await fetch(endpoint, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+  const handleSubmit = async (e?: React.FormEvent, override = false) => {
+    e?.preventDefault()
+    if (isSaving || isCheckingSafety || isAiScanning || isAiLoading) return
+    const payload = {
           medicine_name: medicineName.trim(),
           brand_or_manufacturer: brandOrManufacturer.trim() || null,
           salt_composition: saltComposition.trim(),
@@ -399,8 +352,8 @@ export function AIEnrichmentForm({
           strength: strength.trim() || null,
           quantity: Number(quantity),
           unit,
-          expiry_date: expiryDate ? new Date(expiryDate).toISOString() : null,
-          manufacture_date: manufactureDate ? new Date(manufactureDate).toISOString() : null,
+          expiry_date: expiryDate ? expiryDate : null,
+          manufacture_date: manufactureDate ? manufactureDate : null,
           batch_number: batchNumber.trim() || null,
           storage_location: storageLocation,
           family_member_id: familyMemberId || null,
@@ -410,21 +363,46 @@ export function AIEnrichmentForm({
           target_diseases: targetDiseases,
           is_prescription_required: isPrescriptionRequired,
           is_daily_routine: isDailyRoutine,
-        }),
-      })
-
-      if (res.ok) {
-        router.push('/')
-        router.refresh()
-      } else {
-        const errorData = await res.json()
-        setSaveError('Failed to save medicine: ' + (errorData.error || 'Server error'))
-      }
-    } catch (err) {
-      setSaveError('Network error while saving.')
-    } finally {
-      setIsSaving(false)
+        }
+    const approvedSnapshot = override && JSON.stringify(pendingPayload.current) === JSON.stringify(payload)
+    setSaveError('')
+    setInteractionWarning('')
+    if (familyMemberId && saltComposition && !approvedSnapshot) {
+      setIsCheckingSafety(true)
+      try {
+        const checkRes = await fetch('/api/ai/check-interactions', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ family_member_id: familyMemberId, new_medicine_salt: saltComposition, new_medicine_name: medicineName, exclude_medicine_id: initialData?.id }),
+        })
+        const checkData = await checkRes.json()
+        if (!checkRes.ok || checkData.hasInteraction === null || !['AI_SCREENED', 'NO_COMPARATORS'].includes(checkData.status)) {
+          pendingPayload.current = payload
+          setInteractionWarning('Interaction check is unavailable. Compatibility has not been established. You can record the cabinet item for later pharmacist review.')
+          return
+        }
+        if (checkData.hasInteraction) {
+          pendingPayload.current = payload
+          setInteractionWarning(checkData.warning || 'Potential interaction requires pharmacist review.')
+          return
+        }
+      } catch {
+        pendingPayload.current = payload
+        setInteractionWarning('Interaction check is unavailable. Compatibility has not been established.')
+        return
+      } finally { setIsCheckingSafety(false) }
     }
+    setIsSaving(true)
+    try {
+      const res = await fetch(initialData?.id ? `/api/medicines/${initialData.id}` : '/api/medicines', {
+        method: initialData?.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
+      })
+      const result = await res.json()
+      if (!res.ok || !result.success) throw new Error(result.error || 'Failed to save medicine')
+      pendingPayload.current = null
+      router.push('/')
+      router.refresh()
+    } catch (error) { setSaveError(error instanceof Error ? error.message : 'Network error while saving') }
+    finally { setIsSaving(false) }
   }
 
   return (
@@ -439,8 +417,8 @@ export function AIEnrichmentForm({
             <CardTitle className="text-lg sm:text-xl font-black text-[#2F4858]">
               {initialData?.id ? 'Edit Medicine Details' : 'Add Medicine to Family Cabinet'}
             </CardTitle>
-            <CardDescription className="text-xs text-[#2F4858]/70 font-semibold mt-0.5">
-              AI Multi-Photo Vision Scanner & Smart Expiry / Safety Guardian
+            <CardDescription className="text-xs text-muted-foreground font-semibold mt-0.5">
+              Enter label details or use optional photo extraction. Review every field before saving.
             </CardDescription>
           </div>
         </div>
@@ -451,6 +429,7 @@ export function AIEnrichmentForm({
             <button
               type="button"
               onClick={() => setEntryMode('SCAN')}
+              disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading} aria-pressed={entryMode === 'SCAN'}
               className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                 entryMode === 'SCAN'
                   ? 'bg-[#2F4858] text-[#DDFBEF] shadow-xs'
@@ -463,6 +442,7 @@ export function AIEnrichmentForm({
             <button
               type="button"
               onClick={() => setEntryMode('MANUAL')}
+              disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading} aria-pressed={entryMode === 'MANUAL'}
               className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
                 entryMode === 'MANUAL'
                   ? 'bg-[#2F4858] text-[#DDFBEF] shadow-xs'
@@ -488,25 +468,25 @@ export function AIEnrichmentForm({
                   <span>Multi-Photo AI Recognition (Front, Back & Packaging)</span>
                 </h3>
                 <p className="text-xs font-medium text-[#2F4858]/80">
-                  Upload multiple photos to capture brand name, active salts, batch, and expiry date.
+                  Choose up to four JPG, PNG or WEBP photos (10 MB each). Review extracted names, ingredients and dates before saving.
                 </p>
               </div>
 
               {/* Upload & Camera Buttons */}
               <div className="flex items-center gap-2 pt-1 sm:pt-0">
-                <input
+                <input aria-label="Medicine packaging photos" id={formId + "-field-1"}
                   ref={fileInputRef}
                   type="file"
                   multiple
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => handleAddFiles(e.target.files)}
                   className="hidden"
                 />
-                <input
+                <input aria-label="Take a medicine packaging photo" id={formId + "-field-2"}
                   ref={cameraInputRef}
                   type="file"
                   capture="environment"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   onChange={(e) => handleAddFiles(e.target.files)}
                   className="hidden"
                 />
@@ -538,18 +518,18 @@ export function AIEnrichmentForm({
             {uploadedImages.length > 0 ? (
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {uploadedImages.map((img, idx) => (
+                  {uploadedImages.map((img) => (
                     <div
                       key={img.id}
                       className="relative group rounded-xl overflow-hidden border border-[#2F4858]/20 bg-white shadow-xs flex flex-col"
                     >
                       <div className="relative h-28 w-full bg-slate-100 flex items-center justify-center overflow-hidden">
-                        <img
+                        <Image fill unoptimized sizes="(max-width: 640px) 50vw, 25vw"
                           src={img.preview}
                           alt={img.label}
                           className="w-full h-full object-cover"
                         />
-                        <button
+                        <button aria-label="Remove photo"
                           type="button"
                           onClick={() => handleRemoveImage(img.id)}
                           className="absolute top-1.5 right-1.5 size-6 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-md hover:bg-rose-700 cursor-pointer"
@@ -558,9 +538,9 @@ export function AIEnrichmentForm({
                           <X className="size-3.5" />
                         </button>
                       </div>
-                      <div className="p-2 bg-white flex items-center justify-between text-[10px] font-bold text-[#2F4858]">
+                      <div className="p-2 bg-white flex items-center justify-between text-sm font-bold text-[#2F4858]">
                         <span className="truncate">{img.label}</span>
-                        <span className="text-[#2F4858]/60 font-mono">
+                        <span className="text-muted-foreground font-mono">
                           {(img.file.size / 1024).toFixed(0)}KB
                         </span>
                       </div>
@@ -568,15 +548,15 @@ export function AIEnrichmentForm({
                   ))}
 
                   {/* Add More Photos Slot */}
-                  {uploadedImages.length < 5 && (
+                  {uploadedImages.length < 4 && (
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="h-36 rounded-xl border-2 border-dashed border-[#2F4858]/30 hover:border-[#2F4858] bg-white/60 hover:bg-white flex flex-col items-center justify-center text-center p-3 transition-colors cursor-pointer"
                     >
-                      <Plus className="size-5 text-[#2F4858]/70 mb-1" />
+                      <Plus className="size-5 text-muted-foreground mb-1" />
                       <span className="text-xs font-bold text-[#2F4858]">Add Another Photo</span>
-                      <span className="text-[10px] font-semibold text-[#2F4858]/60 mt-0.5">
+                      <span className="text-sm font-semibold text-muted-foreground mt-0.5">
                         Back / Expiry / Flap
                       </span>
                     </button>
@@ -585,7 +565,7 @@ export function AIEnrichmentForm({
 
                 {/* Scan Action Button */}
                 <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <p className="text-[11px] font-semibold text-[#2F4858]/70">
+                  <p className="text-sm font-semibold text-muted-foreground">
                     📸 {uploadedImages.length} photo(s) selected. Click below to let AI read all labels, ingredients, batch, and expiry dates.
                   </p>
 
@@ -611,7 +591,7 @@ export function AIEnrichmentForm({
               </div>
             ) : (
               <div className="py-4 text-center space-y-2">
-                <div className="flex justify-center gap-2 text-xs font-bold text-[#2F4858]/70">
+                <div className="flex justify-center gap-2 text-xs font-bold text-muted-foreground">
                   <span className="p-1.5 px-2.5 rounded-lg bg-white border border-[#2F4858]/10">
                     📸 Photo 1: Front (Brand Name & Strength)
                   </span>
@@ -623,7 +603,7 @@ export function AIEnrichmentForm({
             )}
 
             {scanError && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
+              <div role="alert" className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-2">
                 <AlertTriangle className="size-4 shrink-0" />
                 <span>{scanError}</span>
               </div>
@@ -634,8 +614,8 @@ export function AIEnrichmentForm({
                 <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
                 <div>
                   <p>{scanSuccessSummary}</p>
-                  <p className="text-[11px] font-semibold text-emerald-700 mt-0.5">
-                    Review and adjust any fields below, then click "Save Medicine" to complete.
+                  <p className="text-sm font-semibold text-emerald-700 mt-0.5">
+                    Review and adjust any fields below, then click &quot;Save Medicine&quot; to complete.
                   </p>
                 </div>
               </div>
@@ -646,7 +626,7 @@ export function AIEnrichmentForm({
         {/* ========================================================================= */}
         {/* EDITABLE FORM FIELDS (Common to both AI Scan and Manual Entry)            */}
         {/* ========================================================================= */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form aria-describedby={saveError ? formId + '-error' : undefined} onSubmit={handleSubmit} className="space-y-5"><fieldset disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading} className="contents">
           {/* AI Name Auto-Fill Assistant (When in Manual Mode) */}
           {entryMode === 'MANUAL' && (
             <Card className="p-4 rounded-2xl bg-[#DDFBEF]/50 border border-[#B7EED8] shadow-none">
@@ -674,7 +654,7 @@ export function AIEnrichmentForm({
           )}
 
           {aiError && (
-            <div className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-xl border border-rose-200">
+            <div id={formId + '-error'} role="alert" className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-xl border border-rose-200">
               {aiError}
             </div>
           )}
@@ -700,11 +680,11 @@ export function AIEnrichmentForm({
               <Label htmlFor="medicineName" className="text-xs font-bold text-[#2F4858]">
                 Medicine / Brand Name <span className="text-rose-600">*</span>
               </Label>
-              <Input
+              <Input aria-label="Medicine / Brand Name *"
                 id="medicineName"
                 type="text"
                 required
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 placeholder="e.g. Augmentin 625 Duo, Calpol 650"
                 value={medicineName}
                 onChange={(e) => setMedicineName(e.target.value)}
@@ -716,11 +696,11 @@ export function AIEnrichmentForm({
               <Label htmlFor="saltComposition" className="text-xs font-bold text-[#2F4858]">
                 Active Salt / Generic Composition <span className="text-rose-600">*</span>
               </Label>
-              <Input
+              <Input aria-label="Active Salt / Generic Composition *"
                 id="saltComposition"
                 type="text"
                 required
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 placeholder="e.g. Amoxicillin 500mg + Potassium Clavulanate 125mg"
                 value={saltComposition}
                 onChange={(e) => setSaltComposition(e.target.value)}
@@ -735,10 +715,10 @@ export function AIEnrichmentForm({
               <Label htmlFor="brandOrManufacturer" className="text-xs font-bold text-[#2F4858]">
                 Manufacturer / Pharmaceutical Company
               </Label>
-              <Input
+              <Input aria-label="Manufacturer / Pharmaceutical Company"
                 id="brandOrManufacturer"
                 type="text"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 placeholder="e.g. GlaxoSmithKline, Cipla, Sun Pharma"
                 value={brandOrManufacturer}
                 onChange={(e) => setBrandOrManufacturer(e.target.value)}
@@ -751,9 +731,9 @@ export function AIEnrichmentForm({
                 <Label htmlFor="dosageForm" className="text-xs font-bold text-[#2F4858]">
                   Dosage Form
                 </Label>
-                <select
+                <select aria-label="Dosage Form"
                   id="dosageForm"
-                  disabled={isSaving}
+                  disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                   value={dosageForm}
                   onChange={(e) => setDosageForm(e.target.value)}
                   className="w-full h-10 px-3 rounded-xl border border-[#2F4858]/20 bg-white text-xs font-bold text-[#2F4858] focus:ring-1 focus:ring-[#2F4858] focus:outline-none cursor-pointer shadow-xs"
@@ -770,10 +750,10 @@ export function AIEnrichmentForm({
                 <Label htmlFor="strength" className="text-xs font-bold text-[#2F4858]">
                   Strength
                 </Label>
-                <Input
+                <Input aria-label="Strength"
                   id="strength"
                   type="text"
-                  disabled={isSaving}
+                  disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                   placeholder="e.g. 625mg, 10mg/5ml"
                   value={strength}
                   onChange={(e) => setStrength(e.target.value)}
@@ -789,11 +769,11 @@ export function AIEnrichmentForm({
               <Label htmlFor="expiryDate" className="text-xs font-bold text-[#2F4858]">
                 Expiry Date <span className="text-rose-600">*</span>
               </Label>
-              <Input
+              <Input aria-label="Expiry Date *"
                 id="expiryDate"
                 type="date"
                 required
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 value={expiryDate}
                 onChange={(e) => setExpiryDate(e.target.value)}
                 className="h-10 rounded-xl border-[#2F4858]/20 bg-white text-xs font-bold text-[#2F4858]"
@@ -802,12 +782,12 @@ export function AIEnrichmentForm({
 
             <div className="space-y-1.5">
               <Label htmlFor="manufactureDate" className="text-xs font-bold text-[#2F4858]">
-                Manufacture Date <span className="text-xs text-[#2F4858]/60">(Optional)</span>
+                Manufacture Date <span className="text-xs text-muted-foreground">(Optional)</span>
               </Label>
-              <Input
+              <Input aria-label="Manufacture Date (Optional)"
                 id="manufactureDate"
                 type="date"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 value={manufactureDate}
                 onChange={(e) => setManufactureDate(e.target.value)}
                 className="h-10 rounded-xl border-[#2F4858]/20 bg-white text-xs font-semibold text-[#2F4858]"
@@ -818,10 +798,10 @@ export function AIEnrichmentForm({
               <Label htmlFor="batchNumber" className="text-xs font-bold text-[#2F4858]">
                 Batch / Lot Number
               </Label>
-              <Input
+              <Input aria-label="Batch / Lot Number"
                 id="batchNumber"
                 type="text"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 placeholder="e.g. B24098"
                 value={batchNumber}
                 onChange={(e) => setBatchNumber(e.target.value)}
@@ -836,12 +816,12 @@ export function AIEnrichmentForm({
               <Label htmlFor="quantity" className="text-xs font-bold text-[#2F4858]">
                 Quantity
               </Label>
-              <Input
+              <Input aria-label="Quantity"
                 id="quantity"
                 type="number"
                 min="1"
                 required
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 value={quantity}
                 onChange={(e) => setQuantity(Number(e.target.value))}
                 className="h-10 rounded-xl border-[#2F4858]/20 bg-white text-xs font-semibold text-[#2F4858]"
@@ -852,9 +832,9 @@ export function AIEnrichmentForm({
               <Label htmlFor="unit" className="text-xs font-bold text-[#2F4858]">
                 Unit
               </Label>
-              <select
+              <select aria-label="Unit"
                 id="unit"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
                 className="w-full h-10 px-3 rounded-xl border border-[#2F4858]/20 bg-white text-xs font-bold text-[#2F4858] focus:ring-1 focus:ring-[#2F4858] focus:outline-none cursor-pointer shadow-xs"
@@ -871,9 +851,9 @@ export function AIEnrichmentForm({
               <Label htmlFor="storageLocation" className="text-xs font-bold text-[#2F4858]">
                 Storage Location in Home
               </Label>
-              <select
+              <select aria-label="Storage Location in Home"
                 id="storageLocation"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 value={storageLocation}
                 onChange={(e) => setStorageLocation(e.target.value)}
                 className="w-full h-10 px-3 rounded-xl border border-[#2F4858]/20 bg-white text-xs font-bold text-[#2F4858] focus:ring-1 focus:ring-[#2F4858] focus:outline-none cursor-pointer shadow-xs"
@@ -894,15 +874,15 @@ export function AIEnrichmentForm({
                 Assign to Family Member Profile
               </Label>
               {memberAgeInfo && (
-                <Badge className={`text-[10px] font-black px-2 py-0.5 rounded-full ${memberAgeInfo.badgeColor}`}>
+                <Badge className={`text-sm font-black px-2 py-0.5 rounded-full ${memberAgeInfo.badgeColor}`}>
                   Age: {memberAgeInfo.formatted} • {memberAgeInfo.lifeStageLabel}
                 </Badge>
               )}
             </div>
 
-            <select
+            <select aria-label="family Member Id"
               id="familyMemberId"
-              disabled={isSaving}
+              disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
               value={familyMemberId}
               onChange={(e) => setFamilyMemberId(e.target.value)}
               className="w-full h-10 px-3 rounded-xl border border-[#2F4858]/20 bg-white text-xs font-bold text-[#2F4858] focus:ring-1 focus:ring-[#2F4858] focus:outline-none cursor-pointer shadow-xs"
@@ -930,7 +910,7 @@ export function AIEnrichmentForm({
               </Label>
               <Textarea
                 id="primaryUses"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 placeholder="What condition or symptom is this medicine prescribed for?"
                 value={primaryUses}
                 onChange={(e) => setPrimaryUses(e.target.value)}
@@ -945,7 +925,7 @@ export function AIEnrichmentForm({
               </Label>
               <Textarea
                 id="dosageInstructions"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 placeholder="e.g. Take 1 tablet twice daily after food with water. Complete full 5-day course."
                 value={dosageInstructions}
                 onChange={(e) => setDosageInstructions(e.target.value)}
@@ -960,7 +940,7 @@ export function AIEnrichmentForm({
               </Label>
               <Textarea
                 id="precautions"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 placeholder="e.g. Avoid alcohol. May cause mild drowsiness. Do not exceed prescribed dose."
                 value={precautions}
                 onChange={(e) => setPrecautions(e.target.value)}
@@ -976,10 +956,10 @@ export function AIEnrichmentForm({
               htmlFor="isDailyRoutine"
               className="p-3 rounded-xl border border-[#2F4858]/15 bg-[#F8FDFB] flex items-center gap-2.5 cursor-pointer hover:bg-[#DDFBEF]/30 transition-colors"
             >
-              <input
+              <input aria-label="Taken Daily (Routine / Chronic Medication)"
                 id="isDailyRoutine"
                 type="checkbox"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 checked={isDailyRoutine}
                 onChange={(e) => setIsDailyRoutine(e.target.checked)}
                 className="size-4 rounded border-[#2F4858]/30 text-[#2F4858] focus:ring-[#2F4858] cursor-pointer"
@@ -993,10 +973,10 @@ export function AIEnrichmentForm({
               htmlFor="isPrescriptionRequired"
               className="p-3 rounded-xl border border-[#2F4858]/15 bg-[#F8FDFB] flex items-center gap-2.5 cursor-pointer hover:bg-[#DDFBEF]/30 transition-colors"
             >
-              <input
+              <input aria-label="Taken Daily (Routine / Chronic Medication)"
                 id="isPrescriptionRequired"
                 type="checkbox"
-                disabled={isSaving}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 checked={isPrescriptionRequired}
                 onChange={(e) => setIsPrescriptionRequired(e.target.checked)}
                 className="size-4 rounded border-[#2F4858]/30 text-[#2F4858] focus:ring-[#2F4858] cursor-pointer"
@@ -1008,7 +988,7 @@ export function AIEnrichmentForm({
           </div>
 
           {saveError && (
-            <div className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-xl border border-rose-200">
+            <div role="alert" className="text-xs text-rose-700 font-bold bg-rose-50 p-3 rounded-xl border border-rose-200">
               {saveError}
             </div>
           )}
@@ -1016,12 +996,12 @@ export function AIEnrichmentForm({
           <Separator className="bg-[#2F4858]/10" />
 
           {/* Action Buttons */}
-          {interactionWarning && !overrideInteraction && (
+          {interactionWarning && (
             <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 mb-4">
               <div className="flex items-start gap-3">
                 <ShieldAlert className="w-5 h-5 text-rose-600 mt-0.5 shrink-0" />
                 <div className="flex-1">
-                  <h4 className="text-sm font-black text-rose-900">Dangerous Drug Interaction Detected</h4>
+                  <h4 className="text-sm font-black text-rose-900">Interaction Review Required</h4>
                   <p className="text-xs text-rose-800 font-medium mt-1 leading-relaxed">{interactionWarning}</p>
                 </div>
               </div>
@@ -1029,8 +1009,8 @@ export function AIEnrichmentForm({
                 <Button type="button" variant="ghost" onClick={() => setInteractionWarning('')} className="rounded-xl text-xs font-bold text-rose-700 hover:bg-rose-100">
                   Cancel & Go Back
                 </Button>
-                <Button type="button" onClick={() => { setOverrideInteraction(true); handleSubmit(); }} className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">
-                  Save Anyway (Ignore Warning)
+                <Button type="button" onClick={() => handleSubmit(undefined, true)} disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading} className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold">
+                  Record Item for Review
                 </Button>
               </div>
             </div>
@@ -1048,7 +1028,7 @@ export function AIEnrichmentForm({
               </Button>
               <Button
                 type="submit"
-                disabled={isSaving || isCheckingSafety}
+                disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 className="h-11 px-8 rounded-xl bg-[#2F4858] hover:bg-[#1E313D] text-[#DDFBEF] text-xs font-black flex items-center justify-center gap-2 shadow-sm transition-all disabled:opacity-50 cursor-pointer"
               >
                 {isSaving ? (
@@ -1070,7 +1050,7 @@ export function AIEnrichmentForm({
               </Button>
             </div>
           )}
-        </form>
+        </fieldset></form>
       </div>
     </Card>
   )

@@ -1,162 +1,58 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Navbar } from '@/components/Navbar'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { 
-  ShieldAlert, 
-  Search, 
-  AlertTriangle,
-  Ban,
-  HelpCircle,
-} from 'lucide-react'
+import { CabinetNav } from '@/components/CabinetNav'
+import { PageHeader } from '@/components/PageHeader'
+import { DataUnavailable } from '@/components/DataUnavailable'
 import { DeepAuditScanButton } from '@/components/DeepAuditScanButton'
-import { AuditLogTable } from '@/components/AuditLogTable'
+import { AuditLogTable, type AuditLog } from '@/components/AuditLogTable'
 import { runSafetyAudit } from '@/app/actions/safety'
 
-export default async function SafetyAuditLogPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ q?: string }>
-}) {
+export default async function SafetyPage({ searchParams }: { searchParams?: Promise<{ q?: string; page?: string }> }) {
+  const params = searchParams ? await searchParams : {}
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
+  if (!user) redirect('/login')
+  const q = (params.q || '').slice(0, 160).replace(/[^\p{L}\p{N}\s.-]/gu, ' ').trim()
+  const page = /^\d+$/.test(params.page || '') ? Math.max(1, Math.min(1000, Number(params.page))) : 1
+  const pageSize = 25
+  const bannedQuery = supabase.from('medicines').select('id, medicine_name, salt_composition, ban_notice_details', { count: 'exact' }).eq('user_id', user.id).eq('is_banned', true).range(0, 99)
+  const matchesQuery = q ? supabase.from('medicines').select('id', { count: 'exact' }).eq('user_id', user.id).or('medicine_name.ilike.%' + q + '%,salt_composition.ilike.%' + q + '%').range(0, 100) : Promise.resolve({ data: [], count: 0, error: null })
+  const [banned, matches] = await Promise.all([bannedQuery, matchesQuery])
+  let logsQuery = supabase.from('safety_audit_logs').select('id, medicine_id, checked_at, result_status, summary, source_reference, medicines(medicine_name, salt_composition)', { count: 'exact' }).eq('user_id', user.id).order('checked_at', { ascending: false }).order('id')
+  const searchTooBroad = (matches.count || 0) > 100
+  if (q) {
+    const ids = (matches.data || []).map(m => m.id).slice(0, 100)
+    logsQuery = logsQuery.or('summary.ilike.%' + q + '%' + (ids.length ? ',medicine_id.in.(' + ids.join(',') + ')' : ''))
   }
-
-  const resolvedParams = searchParams ? await searchParams : {}
-
-  // Fetch all medicines
-  const { data: medicines } = await supabase
-    .from('medicines')
-    .select('*')
-    
-  const bannedMeds = medicines?.filter(m => m.is_banned) || []
-
-  // Fetch audit logs
-  let { data: logs } = await supabase
-    .from('safety_audit_logs')
-    .select('*, medicines(medicine_name, salt_composition)')
-    .order('checked_at', { ascending: false })
-    .limit(50)
-    
-  if (resolvedParams.q) {
-    const q = resolvedParams.q.toLowerCase()
-    logs = logs?.filter(log => 
-      log.medicines?.medicine_name?.toLowerCase().includes(q) ||
-      log.medicines?.salt_composition?.toLowerCase().includes(q) ||
-      log.summary?.toLowerCase().includes(q)
-    ) || null
-  }
-
-  const { data: familyMembers } = await supabase.from('family_members').select('*')
-
-  return (
-    <div className="bg-[#F8FDFB] min-h-screen text-[#2F4858]">
-      <Navbar familyMembers={familyMembers || []} medicines={medicines || []} />
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h2 className="text-xl font-black text-[#2F4858] flex items-center gap-2">
-              <ShieldAlert className="w-6 h-6 text-[#2F4858]" />
-              Regulatory Safety & Ban Scanner
-            </h2>
-            <p className="text-xs text-[#2F4858]/70 font-semibold max-w-2xl">
-              Medfora continuously cross-references your medicine cabinet against CDSCO, FDA, and global regulatory gazette notices to detect prohibited or irrational drug combinations.
-            </p>
-          </div>
-          <DeepAuditScanButton runAuditAction={runSafetyAudit} />
-        </div>
-
-        {/* Action Required: Found Banned Meds */}
-        {bannedMeds.length > 0 && (
-          <Card className="rounded-2xl bg-rose-50 border-2 border-rose-200 shadow-sm relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-              <Ban className="w-32 h-32 text-rose-600" />
-            </div>
-            
-            <CardHeader className="relative z-10 pb-3">
-              <div className="flex items-center gap-2">
-                <Badge variant="destructive" className="font-black uppercase tracking-wider text-xs px-2.5 py-0.5">
-                  <AlertTriangle className="w-3.5 h-3.5 mr-1" />
-                  Critical Hazard Detected
-                </Badge>
-              </div>
-              <CardDescription className="text-xs text-rose-900 font-bold mt-1">
-                {bannedMeds.length} medicine(s) in your cabinet have been flagged as BANNED by regulatory authorities.
-              </CardDescription>
-            </CardHeader>
-
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-3 relative z-10">
-              {bannedMeds.map((med) => (
-                <Card key={med.id} className="p-3 bg-white rounded-xl border border-rose-200 text-xs space-y-1.5 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-[#2F4858] line-clamp-1">{med.medicine_name}</span>
-                    <Badge variant="destructive" className="text-[10px] font-black uppercase">
-                      BANNED
-                    </Badge>
-                  </div>
-                  <p className="text-[#2F4858] font-bold line-clamp-1">{med.salt_composition}</p>
-                  <p className="text-[#2F4858]/80 leading-relaxed line-clamp-2">
-                    {med.ban_notice_details || 'Prohibited by government regulatory order.'}
-                  </p>
-                  <Button render={<Link href={`/medicines/${med.id}`} />} variant="link" size="sm" className="p-0 h-auto text-[11px] font-bold text-[#2F4858] hover:underline pt-1">
-                    View full details & batch info →
-                  </Button>
-                </Card>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Audit Logs Filter & Search Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-8">
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
-            <Button size="sm" className="px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-[#2F4858] text-[#DDFBEF] hover:bg-[#1E313D] shadow-sm">
-              All Log Records
-            </Button>
-          </div>
-          <form method="GET" className="relative">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[#2F4858]/50" />
-            <Input
-              type="text"
-              name="q"
-              defaultValue={resolvedParams.q || ''}
-              placeholder="Search audit trail..."
-              className="pl-8 pr-3 h-9 rounded-xl border-[#2F4858]/20 bg-white text-xs font-semibold text-[#2F4858] focus-visible:ring-1 focus-visible:ring-[#2F4858] w-full sm:w-60 shadow-sm"
-            />
-          </form>
-        </div>
-
-        {/* Audit Logs Trail Table with shadcn Table */}
-        <Card className="rounded-2xl border-[#2F4858]/15 bg-white shadow-sm overflow-hidden">
-          <AuditLogTable logs={logs as any} />
-        </Card>
-
-        {/* Educational Knowledge Card */}
-        <Card className="rounded-2xl bg-[#F8FDFB] border-[#2F4858]/15 shadow-none">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-extrabold uppercase tracking-wider text-[#2F4858] flex items-center gap-1.5">
-              <HelpCircle className="w-4 h-4 text-[#2F4858]" />
-              <span>Why Do Drug Regulators Ban Fixed-Dose Combinations (FDCs)?</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-[#2F4858]/80 leading-relaxed font-medium">
-              Regulatory bodies (such as CDSCO Section 26A and US FDA) periodically prohibit irrational drug cocktails that combine active salts without synergistic clinical benefit, or where one drug masks the symptoms of toxicity caused by another. Medfora continuously tracks these gazette notices to safeguard your family.
-            </p>
-          </CardContent>
-        </Card>
-
-      </main>
-    </div>
-  )
+  const logs = searchTooBroad || matches.error ? null : await logsQuery.range((page - 1) * pageSize, page * pageSize - 1)
+  const nextHref = (next: number) => '/safety?' + new URLSearchParams({ ...(q ? { q } : {}), page: String(next) })
+  return <><CabinetNav /><main id="main-content" tabIndex={-1} className="page-shell">
+    <PageHeader title="Recorded alerts and regulatory screening" description="Request a screen for potential regulatory notices. Coverage and applicability need review; this is not continuous monitoring or a safety guarantee.">
+      <DeepAuditScanButton runAuditAction={runSafetyAudit} />
+    </PageHeader>
+    {banned.error ? <DataUnavailable message="Recorded cabinet warnings could not be loaded." /> : (banned.count || 0) > 0 ? <section className="rounded-2xl border border-rose-300 bg-rose-50 p-5 space-y-3">
+      <h2 className="text-lg font-bold text-rose-950">{banned.count} item(s) have recorded regulatory warnings</h2>
+      {(banned.data || []).map(m => <article key={m.id} className="rounded-xl border bg-white p-4 space-y-2">
+        <h3 className="font-bold break-words">{m.medicine_name}</h3><p className="break-words">{m.salt_composition}</p>
+        <p className="break-words">{m.ban_notice_details || 'Review the recorded warning and applicable notice before use.'}</p>
+        <Link href={'/medicines/' + m.id} className="underline">View medicine and warning details</Link>
+      </article>)}
+      {(banned.count || 0) > (banned.data?.length || 0) && <p role="status">Showing the first 100 warnings. Open the cabinet to find other flagged items.</p>}
+    </section> : <p className="rounded-xl border bg-white p-4">No regulatory warnings are recorded in this account. This does not establish medicine safety or complete screening coverage.</p>}
+    <section className="space-y-4"><h2 className="text-xl font-bold">Screening history</h2>
+      <form method="GET" className="flex flex-wrap gap-3 items-end">
+        <label htmlFor="audit-search" className="block grow text-sm font-semibold">Search medicines, ingredients or notice summaries
+          <input id="audit-search" name="q" type="search" maxLength={160} defaultValue={q} className="block w-full border rounded-lg p-3 text-base mt-1" />
+        </label><button className="action-link" type="submit">Search history</button><Link href="/safety" className="underline py-3">Clear search</Link>
+      </form>
+      {searchTooBroad ? <p role="status" className="text-amber-950">This phrase matches more than 100 medicines. Use a more specific name or ingredient to search their full history.</p> :
+        matches.error || logs?.error || !logs ? <DataUnavailable message="Screening history could not be loaded." /> : <>
+          <p className="text-sm">{logs.count || 0} matching log entry/entries · page {page}. Search is applied before pagination.</p>
+          <AuditLogTable logs={(logs.data || []) as unknown as AuditLog[]} />
+          <nav aria-label="Screening history pages" className="flex gap-4">{page > 1 && <Link href={nextHref(page - 1)} className="underline">Previous history page</Link>}{page * pageSize < (logs.count || 0) && <Link href={nextHref(page + 1)} className="underline">Next history page</Link>}</nav>
+        </>}
+    </section>
+    <p className="text-sm text-muted-foreground">Dates identify individual attempts. Unknown or incomplete checks do not clear existing warnings. Confirm notice applicability and current treatment with a pharmacist or clinician.</p>
+  </main></>
 }

@@ -1,117 +1,40 @@
-/**
- * Robust Google Gemini Client with Dynamic Model Discovery
- * Queries ModelService.ListModels in real-time to use the exact active models supported by the API key.
- */
+export type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } }
+let cachedModel: { name: string; expires: number } | null = null
 
-let cachedWorkingModel: string | null = null
-
-export async function generateGeminiContent(
-  parts: any[],
-  geminiKey: string
-): Promise<any> {
-  if (!geminiKey) {
-    throw new Error('GEMINI_API_KEY is not configured in environment variables.')
+/** Two attempts within one 25-second deadline. Invalid output is never a success. */
+export async function generateGeminiContent(parts: GeminiPart[], geminiKey: string): Promise<Record<string, unknown>> {
+  if (!geminiKey) throw new Error('AI is not configured')
+  const signal = AbortSignal.timeout(25_000)
+  let models = (process.env.GEMINI_MODELS || '').split(',').map(v => v.trim()).filter(v => /^[a-zA-Z0-9.-]+$/.test(v))
+  if (!models.length && cachedModel && cachedModel.expires > Date.now()) models = [cachedModel.name]
+  if (!models.length) {
+    const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': geminiKey }, signal })
+    if (!response.ok) throw new Error(`AI model discovery failed (${response.status})`)
+    const data = await response.json()
+    models = (data.models || []).filter((m: { name: string; supportedGenerationMethods?: string[] }) => m.name.includes('flash') && m.supportedGenerationMethods?.includes('generateContent')).map((m: { name: string }) => m.name.replace(/^models\//, ''))
   }
-
-  // 1. Candidate models to check
-  let candidateModels: string[] = []
-
-  if (cachedWorkingModel) {
-    candidateModels.push(cachedWorkingModel)
-  }
-
-  // 2. Discover live models available on this API key via ModelService.ListModels
-  try {
-    const listRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`
-    )
-    if (listRes.ok) {
-      const listData = await listRes.json()
-      if (Array.isArray(listData.models)) {
-        const supported = listData.models
-          .filter(
-            (m: any) =>
-              Array.isArray(m.supportedGenerationMethods) &&
-              m.supportedGenerationMethods.includes('generateContent')
-          )
-          .map((m: any) => m.name.replace(/^models\//, ''))
-
-        // Sort: flash models first, then 2.0 / 2.5 / 1.5, then pro
-        const flashModels = supported.filter((name: string) => name.includes('flash'))
-        const otherModels = supported.filter((name: string) => !name.includes('flash'))
-
-        candidateModels = Array.from(
-          new Set([...candidateModels, ...flashModels, ...otherModels])
-        )
-      }
+  let lastError = 'No supported AI model available'
+  for (const model of models.slice(0, 2)) {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': geminiKey }, signal,
+      body: JSON.stringify({ contents: [{ role: 'user', parts }], generationConfig: { responseMimeType: 'application/json', temperature: 0.1, maxOutputTokens: 4096 } }),
+    })
+    if (!response.ok) {
+      lastError = `AI request failed (${response.status})`
+      if ([400, 401, 403, 429].includes(response.status)) break
+      continue
     }
-  } catch (listErr) {
-    console.warn('ModelService.ListModels query warning:', listErr)
+    const data = await response.json()
+    const candidate = data.candidates?.[0]
+    if (candidate?.finishReason && candidate.finishReason !== 'STOP') throw new Error('AI output was incomplete or blocked')
+    const text = candidate?.content?.parts?.map((p: { text?: string }) => p.text || '').join('')
+    if (!text) throw new Error('AI returned empty output')
+    let parsed: unknown
+    try { parsed = JSON.parse(text.replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')) }
+    catch { throw new Error('AI returned invalid JSON') }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('AI returned an invalid object')
+    cachedModel = { name: model, expires: Date.now() + 300_000 }
+    return parsed as Record<string, unknown>
   }
-
-  // Fallback defaults if ListModels was empty
-  if (candidateModels.length === 0) {
-    candidateModels = [
-      'gemini-2.0-flash',
-      'gemini-2.0-flash-001',
-      'gemini-2.0-flash-lite',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-flash-002',
-      'gemini-1.5-flash-001',
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
-      'gemini-pro',
-    ]
-  }
-
-  let lastError = ''
-
-  // 3. Try discovered models
-  for (const model of candidateModels) {
-    for (const version of ['v1beta', 'v1']) {
-      try {
-        const controller = new AbortController()
-        const timeoutId = setTimeout(() => controller.abort(), 14000)
-
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/${version}/models/${model}:generateContent?key=${geminiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts }],
-              generationConfig: {
-                response_mime_type: 'application/json',
-                temperature: 0.1,
-              },
-            }),
-            signal: controller.signal,
-          }
-        )
-
-        clearTimeout(timeoutId)
-
-        if (res.ok) {
-          const data = await res.json()
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text
-          if (text) {
-            cachedWorkingModel = model // Cache the confirmed working model
-            try {
-              return JSON.parse(text)
-            } catch (jsonErr) {
-              // If not JSON formatted, return raw object with text
-              return { text, raw: text }
-            }
-          }
-        } else {
-          const errText = await res.text()
-          lastError = `${version}/models/${model} (${res.status}): ${errText}`
-        }
-      } catch (err: any) {
-        lastError = `${version}/models/${model} failed: ${err.message}`
-      }
-    }
-  }
-
-  throw new Error(`Unable to generate content with Gemini API. Last error: ${lastError}`)
+  throw new Error(lastError)
 }
