@@ -97,27 +97,26 @@ export function BiomarkerTrendChart({ familyMemberId, familyMemberName, medicalR
     finally { setDeleting('') }
   }
   return <section className="space-y-5 min-w-0">
-    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-bold">Dated measurement trends</h2>
+    <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-extrabold">Vitals & Biomarker Trends</h2>
       <LogVitalModal familyMemberId={familyMemberId} familyMemberName={familyMemberName} defaultType={selectedCategory === 'CHOLESTEROL' || selectedCategory === 'OTHER' ? 'BLOOD_GLUCOSE' : selectedCategory} /></div>
-    <label className="block text-sm font-semibold">Measurement category
-      <select value={selectedCategory} onChange={e => { setCategory(e.target.value); setSeries(''); setSelectedId('') }} className="block w-full mt-1 border rounded-lg p-3 text-base">
-        {[...categories, ['OTHER', 'Other report measurements']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-      </select></label>
+    <div aria-label="Measurement category" className="flex flex-wrap gap-2 rounded-2xl border border-[#B7EED8] bg-[#DDFBEF]/40 p-2">
+      {[...categories, ['OTHER', 'Other measurements']].map(([value,label]) => <button key={value} type="button" aria-pressed={selectedCategory === value} onClick={() => { setCategory(value); setSeries(''); setSelectedId('') }} className={'rounded-xl px-3 py-2 text-xs font-bold transition-colors ' + (selectedCategory === value ? 'bg-[#2F4858] text-[#DDFBEF] shadow-sm' : 'bg-white text-[#2F4858] hover:bg-[#DDFBEF]')}>{label}</button>)}
+    </div>
     <label className="block text-sm font-semibold">Comparable measurement series
-      <select value={active} onChange={e => { setSeries(e.target.value); setSelectedId('') }} className="block w-full mt-1 border rounded-lg p-3 text-base">
+      <select value={active} onChange={e => { setSeries(e.target.value); setSelectedId('') }} className="block w-full mt-1 border border-[#B7EED8] bg-white rounded-xl p-3 text-sm">
         {series.length ? series.map(([key, p]) => <option key={key} value={key}>{p.name} · {p.unit} · {p.context} · {p.source}</option>) : <option value="">No recorded series</option>}
       </select></label>
     <p className="text-sm text-muted-foreground">Series separate names, units, context and source. Change direction alone does not establish improvement or deterioration. Status comes from the recorded entry.</p>
     {error && <p role="alert" className="rounded-lg bg-rose-50 text-rose-900 p-3">{error}</p>}
     {latest && <div className="grid gap-3 sm:grid-cols-2">
-      <div className="rounded-xl border bg-white p-4"><h3 className="font-semibold">Latest exact numeric reading in this series</h3><p className="text-xl">{latest.raw} {latest.unit}</p><p className="text-sm">{recordedDate(latest.date)}</p></div>
-      <div className="rounded-xl border bg-white p-4"><h3 className="font-semibold">Change from previous exact reading</h3>
+      <div className="rounded-2xl border border-[#B7EED8] bg-white p-4 shadow-sm"><h3 className="font-semibold">Latest exact numeric reading in this series</h3><p className="text-xl">{latest.raw} {latest.unit}</p><p className="text-sm">{recordedDate(latest.date)}</p></div>
+      <div className="rounded-2xl border border-[#B7EED8] bg-white p-4 shadow-sm"><h3 className="font-semibold">Change from previous exact reading</h3>
         <p className="text-xl">{previous ? (latest.value - previous.value > 0 ? '+' : '') + (latest.value - previous.value).toFixed(2) + ' ' + latest.unit : 'Not enough readings'}</p>
         {previous && <p className="text-sm">{recordedDate(previous.date)}</p>}</div>
     </div>}
     {omitted > 0 && <p role="status" className="text-sm">{omitted} entry/entries have a missing date or a non-exact numeric value (such as “&lt;5”). They remain in the table and are not plotted.</p>}
     <div ref={chartBox} className="min-w-0">
-    {plotted.length ? <div className="rounded-xl border bg-white p-2 sm:p-4">
+    {plotted.length ? <div className="rounded-2xl border border-[#B7EED8] bg-white p-2 sm:p-4 shadow-sm">
       <p id={id + '-description'} className="text-sm mb-2">Tap a point for details. Keyboard users: Tab to a point, then use Left/Right arrows. Dates and full values are also in the table.</p>
       <svg viewBox={'0 0 ' + width + ' ' + height} className="w-full h-auto" role="group" aria-labelledby={id + '-title'} aria-describedby={id + '-description'}>
         <title id={id + '-title'}>{familyMemberName}&apos;s {latest?.name} recorded trend</title>
@@ -145,7 +144,7 @@ export function BiomarkerTrendChart({ familyMemberId, familyMemberName, medicalR
       </svg>
       {secondaryPath && <p className="text-sm">Solid line: primary value. Dashed line: secondary blood-pressure value.</p>}
       {selected && <p role="status" className={'rounded-lg border p-3 mt-3 text-sm ' + measurementPresentation(selected.status).className}>{recordedDate(selected.date)} · {selected.source} · {selected.context} · {selected.raw} {selected.unit} · {measurementPresentation(selected.status).label}</p>}
-    </div> : <p className="rounded-xl border bg-white p-4">No exact dated measurements to plot in this series.</p>}
+    </div> : <p className="rounded-2xl border border-[#B7EED8] bg-white p-4 shadow-sm">No exact dated measurements to plot in this series.</p>}
     </div>
     <div className="overflow-x-auto rounded-xl border bg-white" tabIndex={0} role="region" aria-label="Recorded measurement table">
       <table className="w-full text-sm text-left"><caption className="text-left font-bold p-3">Recorded entries for the selected series</caption>

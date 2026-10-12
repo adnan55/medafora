@@ -8,7 +8,7 @@ import { queryBannedDrugsListTool } from '../tools/safetyScanTools'
 export const medicineVisionAgent = new Agent({
   name: 'MedicineVisionAgent',
   description: 'Specialist in multi-photo medicine packaging OCR, pharmaceutical formulation recognition, batch & expiry parsing, and dosage instructions.',
-  model: 'gemini-2.0-flash',
+  model: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
   instruction: `You are the Medicine Vision & Pharmaceutical Recognition Specialist for Medfora.
 You analyze medicine packaging photos (front of box, strip label, bottle, side flap, prescription slip) and extract structured medicine data.
 

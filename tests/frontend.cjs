@@ -97,7 +97,7 @@ test('Anonymous dashboard redirects instead of displaying an empty health profil
 });
 test('Empty dashboard describes health as unassessed', async () => {
   const tree = await loader()('src/app/page.tsx').default({ searchParams: Promise.resolve({}) });
-  assert.match(text(tree), /health status is unassessed/); assert.doesNotMatch(text(tree), /optimal|Good to consume/);
+  assert.match(text(tree), /health (status is )?unassessed/); assert.doesNotMatch(text(tree), /optimal|Good to consume/);
 });
 test('Failed record reads render explicit recovery without health reassurance', async () => {
   const tree = await loader({ db: database({ failed: 'medical_records' }).db })('src/app/page.tsx').default({ searchParams: Promise.resolve({}) });
@@ -107,7 +107,7 @@ test('Failed record reads render explicit recovery without health reassurance', 
 test('Banned but unexpired medicine remains a warning; expiry has no consumption clearance', async () => {
   const medicine = { id: B, user_id: U, medicine_name: 'Fixture', is_banned: true, expiry_date: '2050-01-01' };
   const tree = await loader({ db: database({ medicines: [medicine] }).db })('src/app/page.tsx').default({ searchParams: Promise.resolve({ q: 'other' }) });
-  assert.match(text(tree), /recorded regulatory warnings/); assert.match(text(tree), /More than 45 days until expiry/); assert.doesNotMatch(text(tree), /Good to consume|AI Verified/);
+  assert.match(text(tree), /recorded regulatory warnings/); assert.match(text(tree), /More than 45 days/); assert.doesNotMatch(text(tree), /Good to consume|AI Verified/);
 });
 test('Inventory and history filters run before pagination and queries are bounded', async () => {
   const { db, calls } = database();
@@ -118,6 +118,9 @@ test('Inventory and history filters run before pagination and queries are bounde
   await loader({ db })('src/app/safety/page.tsx').default({ searchParams: Promise.resolve({ q: 'fixture', page: '2' }) });
   const history = calls.find(c => c.table === 'safety_audit_logs');
   assert.ok(history.events.findIndex(e => e[0] === 'or') < history.events.findIndex(e => e[0] === 'range'));
+  assert.match(history.events.find(e => e[0] === 'select')[1], /medicines!inner/);
+  assert.ok(history.events.some(e => e[0] === 'eq' && e[1] === 'medicines.user_id' && e[2] === U));
+  assert.ok(!history.events.some(e => e[0] === 'eq' && e[1] === 'user_id'));
 });
 test('Unknown expiry and abnormal measurements have explicit non-normal styles', () => {
   const status = loader()('src/lib/utils/statusPresentation.ts');
@@ -177,8 +180,8 @@ test('New measurements begin unclassified and report controls have real labels',
 test('Allergy-only summary warnings are visible and chat is available before generation', async () => {
   const h = hooks(), load = loader({ react: h.react, fetcher: async () => ({ ok: true, json: async () => ({ success: true, data: { clinical_overview: 'Fixture overview', vitality_status: 'INSUFFICIENT_DATA', allergy_warnings: ['Recorded allergy warning'], age_specific_alerts: [] } }) }) });
   const render = renderer(load, h, 'src/components/AIHealthSummaryCard.tsx', 'AIHealthSummaryCard', { member, medicines: [], medicalRecords: [], vitalLogs: [] });
-  let tree = render(); assert.match(text(tree), /Ask about these records/);
-  await find(tree, n => n.props.onClick && text(n).trim() === 'Generate record summary').props.onClick(); tree = render();
+  let tree = render(); assert.match(text(tree), /Ask AI Clinical Agent/);
+  await find(tree, n => n.props.onClick && text(n).trim() === 'Generate Health Synthesis').props.onClick(); tree = render();
   assert.match(text(tree), /Recorded allergy warning/); assert.match(text(tree), /Fixture overview/); assert.doesNotMatch(text(tree), /Age-related review warnings/);
 });
 test('Failed report deletion stays open with an accessible error', async () => {

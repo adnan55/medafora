@@ -10,14 +10,18 @@ export async function runSafetyAudit() {
   if (error) throw new Error('Unable to load cabinet medicines')
   if (!medicines?.length) return { completed: false, message: 'No cabinet medicines recorded.' }
   let entries: AuditEntry[]
+  let unavailable = false
   try {
     entries = await screenRegulatory(medicines, process.env.GEMINI_API_KEY || '', process.env.GEMINI_REGULATORY_MODEL || '')
   } catch {
+    unavailable = true
     entries = medicines.map(m => ({ medicine_id: m.id, checked_at: new Date().toISOString(), result_status: 'UNKNOWN', summary: 'Regulatory check unavailable. No safety clearance was issued. Existing bans and warnings are unchanged.', source_reference: 'AI UNAVAILABLE' }))
   }
   const { error: saveError } = await supabase.rpc('record_safety_screen', { p_entries: entries })
   if (saveError) throw new Error('Unable to record audit. Apply the safety migration and retry.')
   revalidatePath('/safety')
   revalidatePath('/')
-  return { completed: false, message: `Screened ${entries.length} item(s). Findings require review; no regulatory clearance was issued.` }
+  return { completed: !unavailable, message: unavailable
+    ? `Regulatory provider unavailable. Recorded UNKNOWN for ${entries.length} item(s); existing bans and warnings are unchanged. Please retry later.`
+    : `Screened ${entries.length} item(s). Findings require review; no regulatory clearance was issued.` }
 }

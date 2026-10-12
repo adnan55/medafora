@@ -29,6 +29,8 @@ const DOSAGE_FORMS = [
   'TABLET',
   'CAPSULE',
   'SYRUP',
+  'ORAL SOLUTION',
+  'SUSPENSION',
   'OINTMENT',
   'DROPS',
   'INHALER',
@@ -767,12 +769,11 @@ export function AIEnrichmentForm({
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="expiryDate" className="text-xs font-bold text-[#2F4858]">
-                Expiry Date <span className="text-rose-600">*</span>
+                Expiry Date <span className="text-muted-foreground">(if known)</span>
               </Label>
-              <Input aria-label="Expiry Date *"
+              <Input aria-label="Expiry Date (if known)"
                 id="expiryDate"
                 type="date"
-                required
                 disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 value={expiryDate}
                 onChange={(e) => setExpiryDate(e.target.value)}
@@ -819,7 +820,7 @@ export function AIEnrichmentForm({
               <Input aria-label="Quantity"
                 id="quantity"
                 type="number"
-                min="1"
+                min="0" step="1"
                 required
                 disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
                 value={quantity}
@@ -880,7 +881,7 @@ export function AIEnrichmentForm({
               )}
             </div>
 
-            <select aria-label="family Member Id"
+            <select aria-label="Assign to Family Member Profile"
               id="familyMemberId"
               disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}
               value={familyMemberId}
@@ -973,7 +974,7 @@ export function AIEnrichmentForm({
               htmlFor="isPrescriptionRequired"
               className="p-3 rounded-xl border border-[#2F4858]/15 bg-[#F8FDFB] flex items-center gap-2.5 cursor-pointer hover:bg-[#DDFBEF]/30 transition-colors"
             >
-              <input aria-label="Taken Daily (Routine / Chronic Medication)"
+              <input aria-label="Doctor Prescription Required (Rx)"
                 id="isPrescriptionRequired"
                 type="checkbox"
                 disabled={isSaving || isCheckingSafety || isAiScanning || isAiLoading}

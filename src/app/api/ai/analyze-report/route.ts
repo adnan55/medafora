@@ -4,12 +4,12 @@ import { NextResponse } from 'next/server'
 import { generateGeminiContent, type GeminiPart } from '@/lib/utils/geminiClient'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 90
 
 export async function POST(req: Request) {
   try {
     const { supabase } = await authenticatedAI()
-    const parsedBody = reportSchema.safeParse(await readJSON(req))
+    const parsedBody = reportSchema.safeParse(await readJSON(req, 14_000_000))
     if (!parsedBody.success) throw new RequestError('Invalid document, images or notes')
     const body = parsedBody.data
     const { fileBase64, mimeType, notes, patientName } = body
@@ -48,12 +48,12 @@ Analyze the uploaded medical document / clinical notes and extract:
    - name (e.g. "Fasting Blood Glucose", "Total Cholesterol", "Hemoglobin", "TSH", "Creatinine")
    - value (e.g. "112", "5.8", "13.2")
    - unit (e.g. "mg/dL", "%", "g/dL", "mIU/L")
-   - status: "NORMAL" | "HIGH" | "LOW" | "ABNORMAL" | "CRITICAL"
-   - reference_range: normal standard range (e.g. "70-99 mg/dL", "< 200 mg/dL")
+   - status: copy the printed classification as "NORMAL" | "HIGH" | "LOW" | "ABNORMAL" | "CRITICAL"; use "UNKNOWN" if not printed. Never infer normality from missing information.
+   - reference_range: copy the printed range only; use an empty string if absent (e.g. "70-99 mg/dL", "< 200 mg/dL")
 9. key_recommendations: Array of clinical next steps, dietary suggestions, or specialist follow-up
 10. detected_allergies_or_contraindications: Array of any allergies or drug contraindications noted
 
-Return strictly valid JSON conforming to the schema.`,
+Return strictly valid JSON conforming to the schema. Do not invent missing dates, units, diagnoses or other findings. Use empty strings for missing text, empty arrays for absent findings, and UNKNOWN for an unclassified measurement.`,
           },
         ]
 

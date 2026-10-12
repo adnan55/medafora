@@ -25,7 +25,7 @@ export async function readBody(req: Request) {
     const { value, done } = await reader.read();
     if (done) break;
     bytes += value.byteLength;
-    if (bytes > 4_000_000) { await reader.cancel(); throw new Error('BODY_TOO_LARGE'); }
+    if (bytes > 14_000_000) { await reader.cancel(); throw new Error('BODY_TOO_LARGE'); }
     text += decoder.decode(value, { stream: true });
   }
   text += decoder.decode();
@@ -49,7 +49,8 @@ export async function aiModel() {
   const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', { headers: { 'x-goog-api-key': Deno.env.get('GEMINI_API_KEY') || '' }, signal: AbortSignal.timeout(5000) });
   if (!response.ok) throw new Error('Model discovery failed');
   const data = await response.json();
-  const model = data.models?.find((m: { name: string; supportedGenerationMethods?: string[] }) => m.name.includes('flash') && m.supportedGenerationMethods?.includes('generateContent'))?.name?.replace(/^models\//, '');
+  const candidates = data.models?.filter((m: { name: string; supportedGenerationMethods?: string[] }) => m.name.includes('flash') && !/tts|image|audio|live|preview|2\.0/.test(m.name) && m.supportedGenerationMethods?.includes('generateContent')).map((m: {name:string}) => m.name.replace(/^models\//, ''));
+  const model = candidates?.includes('gemini-3.6-flash') ? 'gemini-3.6-flash' : candidates?.sort((a: string,b: string)=>b.localeCompare(a, undefined, {numeric:true}))[0];
   if (!model) throw new Error('No supported model available');
   cachedModel = { name: model, expires: Date.now() + 300_000 };
   return model;

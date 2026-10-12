@@ -23,7 +23,7 @@ interface Draft {
 }
 const categories = ['LAB_REPORT', 'DIAGNOSIS', 'PRESCRIPTION', 'IMAGING', 'DOCTOR_CONSULT', 'DISCHARGE_SUMMARY']
 const emptyDraft = (): Draft => ({ title: '', record_type: '', diagnosis: '', test_date: '', doctor_name: '', hospital_clinic: '', summary: '' })
-const controlClass = 'w-full min-w-0 rounded-lg border border-input bg-white px-3 py-2 text-base'
+const controlClass = 'w-full min-w-0 rounded-lg border border-input bg-[#F8FDFB] px-3 py-2 text-sm font-medium'
 function message(error: unknown) { return error instanceof Error ? error.message : 'Please retry.' }
 
 export function AddMedicalRecordModal(props: Props) {
@@ -156,8 +156,8 @@ function RecordDraft({ familyMemberId, familyMemberName, familyMembers = [], tri
   }
   return <Dialog open={open} onOpenChange={setOpenState}>
     <DialogTrigger render={trigger || <Button size="sm">Add report</Button>} />
-    <DialogContent className="sm:max-w-3xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
-      <DialogHeader><DialogTitle>Add report for {memberName}</DialogTitle>
+    <DialogContent className="sm:max-w-3xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6 bg-gradient-to-br from-white to-[#F8FDFB] border border-[#B7EED8] rounded-3xl">
+      <DialogHeader className="pb-4 border-b border-[#B7EED8]"><DialogTitle className="text-lg font-extrabold text-[#2F4858]">Add report for {memberName}</DialogTitle>
         <p className="text-sm text-muted-foreground">Upload a document or enter its details. AI extraction is optional and needs your review.</p></DialogHeader>
       {error && <p id={id + '-error'} role="alert" className="rounded-lg bg-rose-50 text-rose-900 p-3">{error}</p>}
       {notice && <p role="status" className="rounded-lg bg-slate-100 text-slate-800 p-3 text-sm">{notice}</p>}

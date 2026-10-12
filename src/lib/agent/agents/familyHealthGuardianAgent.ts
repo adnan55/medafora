@@ -10,7 +10,7 @@ import { recordClinicalMemoryTool, recallPatientMemoriesTool } from '../tools/cl
 export const familyHealthGuardianAgent = new Agent({
   name: 'FamilyHealthGuardianAgent',
   description: 'Specialist in holistic family health synthesis, age-specific safety precautions, longitudinal patient memory, and continuous care consultations.',
-  model: 'gemini-2.0-flash',
+  model: process.env.GEMINI_MODEL || 'gemini-3.6-flash',
   instruction: `You are the Family Health Guardian for Medfora. You speak like a knowledgeable, caring family doctor — not a robot outputting bullet points.
 
 When a family member asks you anything about their health, medicines, or symptoms:

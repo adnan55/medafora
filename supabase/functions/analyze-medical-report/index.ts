@@ -72,10 +72,10 @@ Return strictly valid JSON conforming to the schema.`
       }
 
       const response = await boundedFetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${await aiModel()}:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${await aiModel()}:generateContent`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
           body: JSON.stringify({
             contents: [{ role: "user", parts }],
             generationConfig: {
@@ -86,7 +86,9 @@ Return strictly valid JSON conforming to the schema.`
         }
       );
 
-      const data = await response.json();
+      if (!response.ok) throw new Error("Provider request failed");
+    const data = await response.json();
+    if (data.candidates?.[0]?.finishReason && data.candidates[0].finishReason !== "STOP") throw new Error("Incomplete AI output");
       if (!response.ok) {
         return new Response(JSON.stringify({ success: false, error: data.error?.message || "Gemini API error" }), {
           status: 500,
@@ -94,9 +96,9 @@ Return strictly valid JSON conforming to the schema.`
         });
       }
 
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = data.candidates?.[0]?.content?.parts?.filter((p: {thought?:boolean}) => !p.thought).map((p: {text?:string}) => p.text || "").join("");
       if (!text) throw new Error("Empty AI output");
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""));
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid AI output");
       return new Response(JSON.stringify({ success: true, data: parsed }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -128,10 +130,10 @@ Return strictly valid JSON:
 }`;
 
       const response = await boundedFetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${await aiModel()}:generateContent?key=${GEMINI_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/${await aiModel()}:generateContent`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: prompt }] }],
             generationConfig: {
@@ -142,7 +144,9 @@ Return strictly valid JSON:
         }
       );
 
-      const data = await response.json();
+      if (!response.ok) throw new Error("Provider request failed");
+    const data = await response.json();
+    if (data.candidates?.[0]?.finishReason && data.candidates[0].finishReason !== "STOP") throw new Error("Incomplete AI output");
       if (!response.ok) {
         return new Response(JSON.stringify({ success: false, error: data.error?.message || "Gemini API error" }), {
           status: 500,
@@ -150,9 +154,9 @@ Return strictly valid JSON:
         });
       }
 
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const text = data.candidates?.[0]?.content?.parts?.filter((p: {thought?:boolean}) => !p.thought).map((p: {text?:string}) => p.text || "").join("");
       if (!text) throw new Error("Empty AI output");
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""));
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid AI output");
       return new Response(JSON.stringify({ success: true, data: parsed }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -196,10 +200,10 @@ Return strictly valid JSON conforming to the schema.`;
     }
 
     const response = await boundedFetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${await aiModel()}:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${await aiModel()}:generateContent`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
         body: JSON.stringify({
           contents: [{ role: "user", parts }],
           generationConfig: {
@@ -210,7 +214,9 @@ Return strictly valid JSON conforming to the schema.`;
       }
     );
 
+    if (!response.ok) throw new Error("Provider request failed");
     const data = await response.json();
+    if (data.candidates?.[0]?.finishReason && data.candidates[0].finishReason !== "STOP") throw new Error("Incomplete AI output");
     if (!response.ok) {
       return new Response(JSON.stringify({ success: false, error: data.error?.message || "Gemini API error" }), {
         status: 500,
@@ -218,9 +224,9 @@ Return strictly valid JSON conforming to the schema.`;
       });
     }
 
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const text = data.candidates?.[0]?.content?.parts?.filter((p: {thought?:boolean}) => !p.thought).map((p: {text?:string}) => p.text || "").join("");
       if (!text) throw new Error("Empty AI output");
-      const parsed = JSON.parse(text);
+      const parsed = JSON.parse(text.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, ""));
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Invalid AI output");
     return new Response(JSON.stringify({ success: true, data: parsed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" }

@@ -19,7 +19,7 @@ export default async function SafetyPage({ searchParams }: { searchParams?: Prom
   const bannedQuery = supabase.from('medicines').select('id, medicine_name, salt_composition, ban_notice_details', { count: 'exact' }).eq('user_id', user.id).eq('is_banned', true).range(0, 99)
   const matchesQuery = q ? supabase.from('medicines').select('id', { count: 'exact' }).eq('user_id', user.id).or('medicine_name.ilike.%' + q + '%,salt_composition.ilike.%' + q + '%').range(0, 100) : Promise.resolve({ data: [], count: 0, error: null })
   const [banned, matches] = await Promise.all([bannedQuery, matchesQuery])
-  let logsQuery = supabase.from('safety_audit_logs').select('id, medicine_id, checked_at, result_status, summary, source_reference, medicines(medicine_name, salt_composition)', { count: 'exact' }).eq('user_id', user.id).order('checked_at', { ascending: false }).order('id')
+  let logsQuery = supabase.from('safety_audit_logs').select('id, medicine_id, checked_at, result_status, summary, source_reference, medicines!inner(medicine_name, salt_composition)', { count: 'exact' }).eq('medicines.user_id', user.id).order('checked_at', { ascending: false }).order('id')
   const searchTooBroad = (matches.count || 0) > 100
   if (q) {
     const ids = (matches.data || []).map(m => m.id).slice(0, 100)

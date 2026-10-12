@@ -28,7 +28,7 @@ begin
     if item->>'result_status' not in ('WARNING', 'UNKNOWN') then raise exception 'Unsupported screen status'; end if;
     if not exists (select 1 from public.medicines m where m.id = (item->>'medicine_id')::uuid and (m.user_id = auth.uid() or auth.role() = 'service_role')) then raise exception 'Medicine not found'; end if;
     insert into public.safety_audit_logs(medicine_id, checked_at, result_status, summary, source_reference)
-    values ((item->>'medicine_id')::uuid, (item->>'checked_at')::timestamptz, item->>'result_status', item->>'summary', item->>'source_reference');
+    values ((item->>'medicine_id')::uuid, (item->>'checked_at')::timestamptz, (jsonb_populate_record(null::public.safety_audit_logs, item)).result_status, item->>'summary', item->>'source_reference');
     update public.medicines set last_regulatory_screen = now() where id = (item->>'medicine_id')::uuid;
   end loop;
 end $$;

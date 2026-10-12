@@ -10,8 +10,8 @@ const optionalText = text.nullable().optional()
 export const medicineSchema = z.object({
   medicine_name: z.string().trim().min(1).max(200),
   brand_or_manufacturer: optionalText, salt_composition: optionalText,
-  dosage_form: z.enum(['TABLET', 'CAPSULE', 'SYRUP', 'OINTMENT', 'DROPS', 'INHALER', 'CREAM', 'GEL', 'INJECTION', 'POWDER / SACHET']),
-  strength: optionalText, quantity: z.number().finite().min(0).max(1_000_000),
+  dosage_form: z.enum(['TABLET', 'CAPSULE', 'SYRUP', 'ORAL SOLUTION', 'SUSPENSION', 'OINTMENT', 'DROPS', 'INHALER', 'CREAM', 'GEL', 'INJECTION', 'POWDER / SACHET']),
+  strength: optionalText, quantity: z.number().finite().int().min(0).max(1_000_000),
   unit: z.enum(['TABLETS', 'CAPSULES', 'STRIPS', 'BOTTLE (ML)', 'TUBE (G)', 'SACHETS', 'VIALS', 'PUFFS / DOSES']),
   expiry_date: optionalDate, manufacture_date: optionalDate, batch_number: optionalText,
   storage_location: z.string().trim().max(200), family_member_id: z.string().uuid().nullable().optional(),
@@ -27,7 +27,7 @@ const image = z.object({
 })
 export const enrichSchema = z.object({ medicineName: z.string().trim().min(1).max(200), brandHint: z.string().max(200).optional() }).strict()
 export const scanSchema = z.object({ images: z.array(image.refine(v => v.mimeType !== 'application/pdf', 'Medicine photos must be images')).max(4).default([]), notes: text.default('') }).refine(v => v.images.length > 0 || v.notes.length > 0, 'Photo or notes required')
-export const reportSchema = z.object({ fileBase64: image.shape.fileBase64.optional(), mimeType: image.shape.mimeType, notes: text.optional(), patientName: z.string().max(200).optional() }).refine(v => !!v.fileBase64 || !!v.notes, 'Document or notes required')
+export const reportSchema = z.object({ fileBase64: z.string().max(13_400_000).regex(/^[A-Za-z0-9+/\s]*={0,2}$/).optional(), mimeType: image.shape.mimeType, notes: text.optional(), patientName: z.string().max(200).optional() }).refine(v => !!v.fileBase64 || !!v.notes, 'Document or notes required')
 export const summarySchema = z.object({ familyMemberId: z.string().uuid(), customQuery: text.optional() })
 export const interactionSchema = z.object({ family_member_id: z.string().uuid(), new_medicine_salt: z.string().trim().min(1).max(1000), new_medicine_name: z.string().max(200).optional(), exclude_medicine_id: z.string().uuid().optional() })
 export const chatSchema = z.object({ prompt: z.string().trim().min(1).max(8000), familyMemberId: z.string().uuid().optional() })

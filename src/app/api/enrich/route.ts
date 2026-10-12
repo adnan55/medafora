@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 import { generateGeminiContent } from '@/lib/utils/geminiClient'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 90
 
 export async function POST(req: Request) {
   try {

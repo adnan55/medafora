@@ -4,12 +4,12 @@ import { NextResponse } from 'next/server'
 import { generateGeminiContent, type GeminiPart } from '@/lib/utils/geminiClient'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 90
 
 export async function POST(req: Request) {
   try {
     const { supabase } = await authenticatedAI()
-    const parsedBody = scanSchema.safeParse(await readJSON(req))
+    const parsedBody = scanSchema.safeParse(await readJSON(req, 12_000_000))
     if (!parsedBody.success) throw new RequestError('Invalid document, images or notes')
     const body = parsedBody.data
     const { images = [], notes = '' } = body

@@ -118,7 +118,8 @@ test('Chat without AI never claims an audit or SAFE', async () => {
 });
 test('Failed regulatory screen logs UNKNOWN and changes no ban flags or successful-check date', async () => {
   const { db, calls } = database({ medicines: [{ id: A, medicine_name: 'Review', is_banned: true }] });
-  await loader({ db })('src/app/actions/safety.ts').runSafetyAudit();
+  const result = await loader({ db })('src/app/actions/safety.ts').runSafetyAudit();
+  assert.equal(result.completed, false); assert.match(result.message, /provider unavailable/i);
   const saved = calls.find(c => c.rpc).args.p_entries;
   assert.equal(saved[0].result_status, 'UNKNOWN'); assert.equal(calls.filter(c => c.update).length, 0);
 });
@@ -286,4 +287,38 @@ test('Scheduler with a busy durable lease performs no scan and no writes', async
   load('supabase/functions/scan-banned-medicines/index.ts');
   const result = await handler(new Request('https://offline.invalid', { method: 'POST', headers: { authorization: 'Bearer fake-secret' } }));
   assert.equal(result.status, 409); assert.equal(calls.length, 1); assert.equal(calls[0].rpc, 'acquire_safety_scan');
+});
+
+
+test('Transient Gemini failure tries the second configured model; thought text is excluded', async () => {
+  const models = [];
+  const load = loader({ globals: { process: { env: { GEMINI_MODELS: 'test-primary,test-fallback' } }, fetch: async url => {
+    models.push(url);
+    if (models.length === 1) throw new Error('Provider timeout');
+    return {ok:true, json:async()=>({candidates:[{finishReason:'STOP',content:{parts:[{thought:true,text:'private reasoning'}, {text:'{"status":"ok"}'}]}}]})};
+  } } });
+  const result = await load('src/lib/utils/geminiClient.ts').generateGeminiContent([{text:'Synthetic fixture'}], 'fake');
+  assert.equal(result.status,'ok'); assert.equal(models.length,2); assert.match(models[1],/test-fallback/);
+});
+
+test('Report size matches the 10 MB upload UI and rejects an oversized encoded PDF', () => {
+  const {reportSchema} = loader()('src/lib/validation/requests.ts');
+  assert.equal(reportSchema.safeParse({fileBase64:'A'.repeat(13333336),mimeType:'application/pdf'}).success,true);
+  assert.equal(reportSchema.safeParse({fileBase64:'A'.repeat(13400001),mimeType:'application/pdf'}).success,false);
+});
+
+test('Existing oral solution is editable; fractional inventory is rejected before Postgres', () => {
+  const {medicineSchema} = loader()('src/lib/validation/requests.ts');
+  assert.equal(medicineSchema.safeParse({...validMedicine,dosage_form:'ORAL SOLUTION'}).success,true);
+  assert.equal(medicineSchema.safeParse({...validMedicine,quantity:1.5}).success,false);
+});
+
+test('ADK cabinet and history tools do not report fake success after auth or database failures', async () => {
+  const anonymous = database({user:null});
+  const tools = loader({db:anonymous.db})('src/lib/agent/tools/databaseTools.ts');
+  assert.equal((await tools.fetchMedicineCabinetTool.execute({})).status,'UNAUTHORIZED');
+  assert.equal((await tools.fetchPatientClinicalHistoryTool.execute({family_member_id:M})).status,'UNAUTHORIZED');
+  assert.equal(anonymous.calls.filter(c=>c.table).length,0);
+  const failed = database({failureTable:'medicines'});
+  assert.equal((await loader({db:failed.db})('src/lib/agent/tools/databaseTools.ts').fetchMedicineCabinetTool.execute({})).status,'UNAVAILABLE');
 });
